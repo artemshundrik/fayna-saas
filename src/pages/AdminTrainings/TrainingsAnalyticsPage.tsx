@@ -1,27 +1,42 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  Alert,
-  Avatar,
-  Button,
-  Group,
-  Loader,
-  Paper,
-  ScrollArea,
-  SimpleGrid,
-  Stack,
+  CalendarRange,
+  CheckCircle2,
+  ClipboardList,
+  HeartPulse,
+  Loader2,
+  ShieldAlert,
+  Swords,
+  TrendingUp,
+  Users,
+  XCircle,
+} from "lucide-react";
+
+import { getTrainings } from "../../api/trainings";
+import type { AttendanceStatus, Training } from "../../types/trainings";
+import { supabase } from "../../lib/supabaseClient";
+
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
   Table,
-  Text,
-  TextInput,
-  Title,
-} from '@mantine/core';
-import { useEffect, useMemo, useState } from 'react';
-import { getTrainings } from '../../api/trainings';
-import type { AttendanceStatus, Training } from '../../types/trainings';
-import { supabase } from '../../lib/supabaseClient';
-import { useNavigate } from 'react-router-dom';
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { CONTROL_BASE } from "@/components/ui/controlStyles";
 
-const TEAM_ID = '389719a7-5022-41da-bc49-11e7a3afbd98';
+const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
-type TrainingType = 'regular' | 'sparring';
+type TrainingType = "regular" | "sparring";
 
 type Player = {
   id: string;
@@ -53,14 +68,6 @@ type PlayerAttendanceRow = {
   attendancePercent: number | null;
 };
 
-type GlobalAttendanceSummary = {
-  presentCount: number;
-  absentCount: number;
-  injuredCount: number;
-  sickCount: number;
-  attendancePercent: number | null;
-};
-
 type TypeAttendanceSummary = {
   type: TrainingType;
   trainingsCount: number;
@@ -69,47 +76,40 @@ type TypeAttendanceSummary = {
   attendancePercent: number | null;
 };
 
-const statusLabels: Record<AttendanceStatus, string> = {
-  present: 'Присутній',
-  absent: 'Відсутній',
-  injured: 'Травма',
-  sick: 'Хворий',
-};
-
 const typeLabels: Record<TrainingType, string> = {
-  regular: 'Звичайне тренування',
-  sparring: 'Спаринг',
+  regular: "Звичайне тренування",
+  sparring: "Спаринг",
 };
 
-const typeIcons: Record<TrainingType, string> = {
-  regular: '🏃',
-  sparring: '⚔️',
+const typeIcons: Record<TrainingType, React.ElementType> = {
+  regular: ClipboardList,
+  sparring: Swords,
+};
+
+const positionUkMap: Record<string, string> = {
+  gk: "Воротар",
+  goalkeeper: "Воротар",
+  df: "Захисник",
+  cb: "Центр. захисник",
+  lb: "Лівий захисник",
+  rb: "Правий захисник",
+  mf: "Півзахисник",
+  cm: "Центр. півзахисник",
+  dm: "Опорний півзахисник",
+  am: "Атак. півзахисник",
+  fw: "Нападник",
+  st: "Нападник",
+  cf: "Центр. форвард",
+  lf: "Лівий форвард",
+  rf: "Правий форвард",
+  wing: "Фланговий",
+  universal: "Універсал",
+  univ: "Універсал",
 };
 
 function round1(val: number) {
   return Math.round(val * 10) / 10;
 }
-
-const positionUkMap: Record<string, string> = {
-  gk: 'Воротар',
-  goalkeeper: 'Воротар',
-  df: 'Захисник',
-  cb: 'Центр. захисник',
-  lb: 'Лівий захисник',
-  rb: 'Правий захисник',
-  mf: 'Півзахисник',
-  cm: 'Центр. півзахисник',
-  dm: 'Опорний півзахисник',
-  am: 'Атак. півзахисник',
-  fw: 'Нападник',
-  st: 'Нападник',
-  cf: 'Центр. форвард',
-  lf: 'Лівий форвард',
-  rf: 'Правий форвард',
-  wing: 'Фланговий',
-  universal: 'Універсал',
-  univ: 'Універсал',
-};
 
 export function TrainingsAnalyticsPage() {
   const [trainings, setTrainings] = useState<Training[]>([]);
@@ -117,8 +117,8 @@ export function TrainingsAnalyticsPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [fromDate, setFromDate] = useState<string>('');
-  const [toDate, setToDate] = useState<string>('');
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -128,11 +128,11 @@ export function TrainingsAnalyticsPage() {
       try {
         const [trainingsData, attendanceRes, playersRes] = await Promise.all([
           getTrainings(TEAM_ID),
-          supabase.from('training_attendance').select('training_id, player_id, status, created_at'),
+          supabase.from("training_attendance").select("training_id, player_id, status, created_at"),
           supabase
-            .from('players')
-            .select('id, first_name, last_name, shirt_number, position, photo_url')
-            .eq('team_id', TEAM_ID),
+            .from("players")
+            .select("id, first_name, last_name, shirt_number, position, photo_url")
+            .eq("team_id", TEAM_ID),
         ]);
         if (attendanceRes.error) throw attendanceRes.error;
         if (playersRes.error) throw playersRes.error;
@@ -141,7 +141,7 @@ export function TrainingsAnalyticsPage() {
         setPlayers((playersRes.data || []) as Player[]);
       } catch (e: any) {
         console.error(e);
-        setError(e.message || 'Не вдалося завантажити аналітику');
+        setError(e.message || "Не вдалося завантажити аналітику");
       } finally {
         setLoading(false);
       }
@@ -160,7 +160,7 @@ export function TrainingsAnalyticsPage() {
   const completedTrainings = useMemo(() => {
     const now = Date.now();
     return filteredTrainings.filter(
-      (t) => new Date(`${t.date}T${t.time || '00:00'}`).getTime() <= now,
+      (t) => new Date(`${t.date}T${t.time || "00:00"}`).getTime() <= now,
     );
   }, [filteredTrainings]);
 
@@ -185,22 +185,22 @@ export function TrainingsAnalyticsPage() {
 
   const typeSummaries: TypeAttendanceSummary[] = useMemo(() => {
     const summaries: TypeAttendanceSummary[] = [
-      { type: 'regular', trainingsCount: 0, presentCount: 0, absentCount: 0, attendancePercent: null },
-      { type: 'sparring', trainingsCount: 0, presentCount: 0, absentCount: 0, attendancePercent: null },
+      { type: "regular", trainingsCount: 0, presentCount: 0, absentCount: 0, attendancePercent: null },
+      { type: "sparring", trainingsCount: 0, presentCount: 0, absentCount: 0, attendancePercent: null },
     ];
     const byTraining = new Map<string, TrainingType>();
     completedTrainings.forEach((t) => {
-      if (t.type === 'regular' || t.type === 'sparring') {
-        summaries[t.type === 'regular' ? 0 : 1].trainingsCount += 1;
+      if (t.type === "regular" || t.type === "sparring") {
+        summaries[t.type === "regular" ? 0 : 1].trainingsCount += 1;
         byTraining.set(t.id, t.type);
       }
     });
     dedupAttendance.forEach((row) => {
       const tType = byTraining.get(row.training_id);
       if (!tType) return;
-      const idx = tType === 'regular' ? 0 : 1;
-      if (row.status === 'present') summaries[idx].presentCount += 1;
-      if (row.status === 'absent') summaries[idx].absentCount += 1;
+      const idx = tType === "regular" ? 0 : 1;
+      if (row.status === "present") summaries[idx].presentCount += 1;
+      if (row.status === "absent") summaries[idx].absentCount += 1;
     });
     summaries.forEach((s) => {
       const denom = s.presentCount + s.absentCount;
@@ -208,6 +208,31 @@ export function TrainingsAnalyticsPage() {
     });
     return summaries;
   }, [completedTrainings, dedupAttendance]);
+
+  const globalSummary = useMemo(() => {
+    let presentCount = 0;
+    let absentCount = 0;
+    let injuredCount = 0;
+    let sickCount = 0;
+    dedupAttendance.forEach((row) => {
+      if (row.status === "present") presentCount += 1;
+      if (row.status === "absent") absentCount += 1;
+      if (row.status === "injured") injuredCount += 1;
+      if (row.status === "sick") sickCount += 1;
+    });
+    const denom = presentCount + absentCount;
+    return {
+      presentCount,
+      absentCount,
+      injuredCount,
+      sickCount,
+      attendancePercent: denom === 0 ? null : round1((presentCount / denom) * 100),
+    };
+  }, [dedupAttendance]);
+
+  const uniquePlayers = useMemo(() => {
+    return new Set(dedupAttendance.map((row) => row.player_id)).size;
+  }, [dedupAttendance]);
 
   const playerRows: PlayerAttendanceRow[] = useMemo(() => {
     const trainingsInPeriod = completedTrainings.length;
@@ -234,10 +259,10 @@ export function TrainingsAnalyticsPage() {
     dedupAttendance.forEach((row) => {
       const entry = map.get(row.player_id);
       if (!entry) return;
-      if (row.status === 'present') entry.presentCount += 1;
-      if (row.status === 'absent') entry.absentCount += 1;
-      if (row.status === 'injured') entry.injuredCount += 1;
-      if (row.status === 'sick') entry.sickCount += 1;
+      if (row.status === "present") entry.presentCount += 1;
+      if (row.status === "absent") entry.absentCount += 1;
+      if (row.status === "injured") entry.injuredCount += 1;
+      if (row.status === "sick") entry.sickCount += 1;
     });
 
     map.forEach((entry) => {
@@ -269,7 +294,7 @@ export function TrainingsAnalyticsPage() {
   }, [playerRows]);
 
   const absentTop = useMemo(() => {
-    const filtered = playerRows
+    return playerRows
       .filter((r) => r.trainingsTracked >= 3)
       .sort((a, b) => {
         if (b.absentCount !== a.absentCount) return b.absentCount - a.absentCount;
@@ -277,24 +302,23 @@ export function TrainingsAnalyticsPage() {
       })
       .filter((r) => r.absentCount > 0)
       .slice(0, 3);
-    return filtered;
   }, [playerRows]);
 
-  const applyPreset = (preset: 'thisMonth' | 'lastMonth' | 'thisWeek' | 'thisYear') => {
+  const applyPreset = (preset: "thisMonth" | "lastMonth" | "thisWeek" | "thisYear") => {
     const today = new Date();
-    if (preset === 'thisMonth') {
+    if (preset === "thisMonth") {
       const start = new Date(today.getFullYear(), today.getMonth(), 1);
       const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       setFromDate(start.toISOString().slice(0, 10));
       setToDate(end.toISOString().slice(0, 10));
     }
-    if (preset === 'lastMonth') {
+    if (preset === "lastMonth") {
       const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
       const end = new Date(today.getFullYear(), today.getMonth(), 0);
       setFromDate(start.toISOString().slice(0, 10));
       setToDate(end.toISOString().slice(0, 10));
     }
-    if (preset === 'thisWeek') {
+    if (preset === "thisWeek") {
       const day = today.getDay();
       const diffToMonday = day === 0 ? -6 : 1 - day;
       const monday = new Date(today);
@@ -304,285 +328,331 @@ export function TrainingsAnalyticsPage() {
       setFromDate(monday.toISOString().slice(0, 10));
       setToDate(sunday.toISOString().slice(0, 10));
     }
-    if (preset === 'thisYear') {
+    if (preset === "thisYear") {
       setFromDate(`${today.getFullYear()}-01-01`);
       setToDate(`${today.getFullYear()}-12-31`);
     }
   };
 
+  const hasTrainings = filteredTrainings.length > 0;
+
   if (loading) {
     return (
-      <Group>
-        <Loader size="sm" />
-        <Text>Завантаження…</Text>
-      </Group>
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Завантаження аналітики…
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Alert color="red" variant="light" title="Помилка">
-        {error}
+      <Alert variant="destructive">
+        <ShieldAlert className="h-4 w-4" />
+        <AlertTitle>Помилка</AlertTitle>
+        <AlertDescription>{error}</AlertDescription>
       </Alert>
     );
   }
 
-  const hasTrainings = filteredTrainings.length > 0;
+  const statPill = (value: string | number, className: string) => (
+    <span className={cn("inline-flex min-w-[48px] items-center justify-end font-semibold tabular-nums", className)}>
+      {value}
+    </span>
+  );
 
   return (
-    <Stack gap="lg">
-      <Title order={2}>Аналітика тренувань</Title>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Аналітика тренувань</h1>
+          <p className="text-sm text-muted-foreground">
+            Відстежуй відвідуваність, лідерів присутності та тренувальні тренди.
+          </p>
+        </div>
+      </div>
 
-      <Paper withBorder shadow="xs" radius="md" p="md">
-        <Group justify="space-between" align="flex-end" wrap="wrap" gap="sm">
-          <Stack gap={4} style={{ minWidth: 240 }}>
-            <Text size="sm" fw={600}>
-              Період
-            </Text>
-            <Group gap="sm" wrap="wrap">
-              <TextInput
+      <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
+        <CardHeader className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <CardTitle className="text-lg">Період</CardTitle>
+            <p className="text-sm text-muted-foreground">Оберіть діапазон дат або пресет.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => applyPreset("thisWeek")}>Цей тиждень</Button>
+            <Button variant="outline" size="sm" onClick={() => applyPreset("thisMonth")}>Цей місяць</Button>
+            <Button variant="outline" size="sm" onClick={() => applyPreset("lastMonth")}>Минулий місяць</Button>
+            <Button variant="outline" size="sm" onClick={() => applyPreset("thisYear")}>Цей рік</Button>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Початок
+            </label>
+            <div className="relative">
+              <CalendarRange className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
                 type="date"
-                label="Початок"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.currentTarget.value)}
+                className={cn(CONTROL_BASE, "pl-9")}
               />
-              <TextInput
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Кінець
+            </label>
+            <div className="relative">
+              <CalendarRange className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
                 type="date"
-                label="Кінець"
                 value={toDate}
                 onChange={(e) => setToDate(e.currentTarget.value)}
+                className={cn(CONTROL_BASE, "pl-9")}
               />
-            </Group>
-          </Stack>
-          <Group gap="sm" wrap="wrap">
-            <Button variant="light" onClick={() => applyPreset('thisWeek')}>
-              Цей тиждень
-            </Button>
-            <Button variant="light" onClick={() => applyPreset('thisMonth')}>
-              Цей місяць
-            </Button>
-            <Button variant="light" onClick={() => applyPreset('lastMonth')}>
-              Минулий місяць
-            </Button>
-            <Button variant="light" onClick={() => applyPreset('thisYear')}>
-              Цей рік
-            </Button>
-          </Group>
-        </Group>
-      </Paper>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {!hasTrainings ? (
-        <Paper withBorder shadow="xs" radius="md" p="md">
-          <Stack gap={4}>
-            <Title order={4} m={0}>
-              Немає тренувань у вибраному періоді
-            </Title>
-            <Text c="dimmed">Змініть діапазон дат або створіть нове тренування.</Text>
-          </Stack>
-        </Paper>
+        <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
+          <CardHeader>
+            <CardTitle className="text-lg">Немає тренувань у вибраному періоді</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            Змініть діапазон дат або створіть нове тренування.
+          </CardContent>
+        </Card>
       ) : (
         <>
-          <Paper withBorder shadow="xs" radius="md" p="md">
-            <Title order={4} m={0}>
-              Кількість тренувань за типом
-            </Title>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" mt="sm">
-              {typeSummaries.map((t) => (
-                <Paper key={t.type} withBorder shadow="xs" radius="md" p="sm">
-                  <Stack gap={4}>
-                    <Group gap={6}>
-                      <Text>{typeIcons[t.type]}</Text>
-                      <Text size="sm" c="dimmed">
-                        {typeLabels[t.type]}
-                      </Text>
-                    </Group>
-                    <Text size="sm">Кількість: {t.trainingsCount}</Text>
-                    <Text size="sm">Відвідуваність: {t.attendancePercent ?? '—'}%</Text>
-                  </Stack>
-                </Paper>
-              ))}
-            </SimpleGrid>
-          </Paper>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Всього тренувань</div>
+                  <div className="text-2xl font-semibold tabular-nums">{completedTrainings.length}</div>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <ClipboardList className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Сер. відвідуваність</div>
+                  <div className="text-2xl font-semibold tabular-nums">
+                    {globalSummary.attendancePercent ?? "—"}%
+                  </div>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600">
+                  <TrendingUp className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="rounded-[var(--radius-inner)] border border-border bg-card shadow-none">
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground">Гравців із відмітками</div>
+                  <div className="text-2xl font-semibold tabular-nums">{uniquePlayers}</div>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-600">
+                  <Users className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-                    <Paper withBorder shadow="xs" radius="md" p="md" style={{ overflow: 'hidden' }}>
-            <Title order={4} m={0}>
-              Присутність по гравцях
-            </Title>
-            <ScrollArea
-              offsetScrollbars
-              mt="sm"
-              style={{ marginLeft: -16, marginRight: -16 }}
-            >
-                            <Table
-                highlightOnHover
-                withColumnBorders={false}
-                withRowBorders
-                style={{
-                  width: '100%',
-                  '--table-border-color': '#e5e7eb',
-                  '--table-row-hover-background': '#f2f4f7',
-                }}
-                styles={{
-                  th: { padding: '12px 16px' },
-                  td: { padding: '14px 16px' },
-                  tr: { cursor: 'pointer' },
-                  tbody: {
-                    '& tr:last-of-type td': {
-                      borderBottom: 'none',
-                    },
-                  },
-                }}
-              >
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th style={{ width: 70 }}>#</Table.Th>
-                    <Table.Th style={{ paddingLeft: 0 }}>Гравець</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>Було тренувань</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>Присутній</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>Відсутній</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>Травма</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>Хворий</Table.Th>
-                    <Table.Th style={{ textAlign: 'right' }}>%</Table.Th>
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
+          <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
+            <CardHeader>
+              <CardTitle className="text-lg">Кількість тренувань за типом</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              {typeSummaries.map((t) => {
+                const Icon = typeIcons[t.type];
+                return (
+                  <div key={t.type} className="flex items-center justify-between rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-foreground">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-semibold text-foreground">{typeLabels[t.type]}</div>
+                        <div className="text-xs text-muted-foreground">Кількість: {t.trainingsCount}</div>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="rounded-full">
+                      {t.attendancePercent ?? "—"}%
+                    </Badge>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
+            <CardHeader>
+              <CardTitle className="text-lg">Присутність по гравцях</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="w-[60px] text-xs">#</TableHead>
+                    <TableHead className="text-xs">Гравець</TableHead>
+                    <TableHead className="text-right text-xs">Було тренувань</TableHead>
+                    <TableHead className="text-right text-xs">Присутній</TableHead>
+                    <TableHead className="text-right text-xs">Відсутній</TableHead>
+                    <TableHead className="text-right text-xs">Травма</TableHead>
+                    <TableHead className="text-right text-xs">Хворий</TableHead>
+                    <TableHead className="text-right text-xs">%</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {playerRows.map((row, idx) => {
                     const initials =
-                      `${row.name.replace(/^#\d+\s/, '').split(' ').map((p) => p[0]).join('')}` || '•';
+                      `${row.name.replace(/^#\d+\s/, "").split(" ").map((p) => p[0]).join("")}` || "•";
                     const positionLabel = row.position
                       ? positionUkMap[row.position.toLowerCase()] || row.position
                       : null;
-                    const statPill = (value: string | number, color: string) => (
-                      <div
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'flex-end',
-                          minWidth: 68,
-                          fontWeight: 700,
-                          color,
-                        }}
-                      >
-                        {value}
-                      </div>
-                    );
+
                     return (
-                      <Table.Tr
+                      <TableRow
                         key={row.playerId}
+                        className="cursor-pointer hover:bg-muted/40"
                         onClick={() => navigate(`/players/${row.playerId}`)}
                       >
-                        <Table.Td>
-                          <Text fw={700} c="dimmed">
-                            #{row.shirtNumber ?? idx + 1}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td style={{ paddingLeft: 0 }}>
-                          <Group gap="sm" style={{ textDecoration: 'none', color: 'inherit' }}>
-                            <Avatar
-                              radius="xl"
-                              color="blue"
-                              variant="light"
-                              src={row.photoUrl || undefined}
-                              styles={{
-                                root: {
-                                  alignSelf: 'flex-end',
-                                  marginTop: 6,
-                                  border: row.photoUrl ? '1px solid #e5e7eb' : undefined,
-                                },
-                                image: {
-                                  objectPosition: 'top center',
-                                  transform: 'scale(1.6) translateY(18%)',
-                                },
-                              }}
-                            >
-                              {initials}
+                        <TableCell className="text-muted-foreground">#{row.shirtNumber ?? idx + 1}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9 border border-border">
+                              <AvatarImage src={row.photoUrl || undefined} className="object-cover" />
+                              <AvatarFallback>{initials}</AvatarFallback>
                             </Avatar>
-                            <Stack gap={2} justify="center">
-                              <Text fw={700}>{row.name.replace(/^#\d+\s/, '')}</Text>
+                            <div>
+                              <div className="font-semibold text-foreground">{row.name.replace(/^#\d+\s/, "")}</div>
                               {positionLabel && (
-                                <Text
-                                  size="xs"
-                                  c="dimmed"
-                                  fw={
-                                    positionLabel === 'Воротар' || positionLabel === 'Універсал'
-                                      ? 700
-                                      : 500
-                                  }
-                                >
-                                  {positionLabel}
-                                </Text>
+                                <div className="text-xs text-muted-foreground">{positionLabel}</div>
                               )}
-                            </Stack>
-                          </Group>
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>
-                          {statPill(row.trainingsTracked, '#0f172a')}
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>
-                          {statPill(row.presentCount, '#10B981')}
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>
-                          {statPill(row.absentCount, '#EF4444')}
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>
-                          {statPill(row.injuredCount, '#F59E0B')}
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>
-                          {statPill(row.sickCount, '#3B82F6')}
-                        </Table.Td>
-                        <Table.Td style={{ textAlign: 'right' }}>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {statPill(row.trainingsTracked, "text-foreground")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {statPill(row.presentCount, "text-emerald-500")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {statPill(row.absentCount, "text-rose-500")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {statPill(row.injuredCount, "text-amber-500")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {statPill(row.sickCount, "text-sky-500")}
+                        </TableCell>
+                        <TableCell className="text-right">
                           {statPill(
-                            row.attendancePercent === null ? '—' : `${row.attendancePercent}%`,
-                            '#7c3aed',
+                            row.attendancePercent === null ? "—" : `${row.attendancePercent}%`,
+                            "text-indigo-500",
                           )}
-                        </Table.Td>
-                      </Table.Tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </Table.Tbody>
+                </TableBody>
               </Table>
+            </CardContent>
+          </Card>
 
-            </ScrollArea>
-          </Paper>
-
-
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-            <Paper withBorder shadow="xs" radius="md" p="md">
-              <Title order={5} m={0}>
-                Найстабільніші гравці
-              </Title>
-              <Stack gap={6} mt="sm">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  Найстабільніші гравці
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
                 {stableTop.length === 0 ? (
-                  <Text c="dimmed">Недостатньо даних для рейтингу.</Text>
+                  <p className="text-muted-foreground">Недостатньо даних для рейтингу.</p>
                 ) : (
                   stableTop.map((r) => (
-                    <Text key={r.playerId} size="sm">
-                      • {r.name} — {r.attendancePercent}% ({r.trainingsTracked} тренувань)
-                    </Text>
+                    <div key={r.playerId} className="flex items-center justify-between">
+                      <span className="font-medium text-foreground">{r.name}</span>
+                      <span className="text-muted-foreground">{r.attendancePercent}% • {r.trainingsTracked} тренувань</span>
+                    </div>
                   ))
                 )}
-              </Stack>
-            </Paper>
+              </CardContent>
+            </Card>
 
-            <Paper withBorder shadow="xs" radius="md" p="md">
-              <Title order={5} m={0}>
-                Найбільше прогулів
-              </Title>
-              <Stack gap={6} mt="sm">
+            <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <XCircle className="h-5 w-5 text-rose-500" />
+                  Найбільше прогулів
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
                 {absentTop.length === 0 ? (
-                  <Text c="dimmed">У цього періоду немає прогулів 👏.</Text>
+                  <p className="text-muted-foreground">У цього періоду немає прогулів 👏.</p>
                 ) : (
                   absentTop.map((r) => (
-                    <Text key={r.playerId} size="sm">
-                      • {r.name} — {r.absentCount} пропуски ({r.trainingsTracked} тренувань)
-                    </Text>
+                    <div key={r.playerId} className="flex items-center justify-between">
+                      <span className="font-medium text-foreground">{r.name}</span>
+                      <span className="text-muted-foreground">{r.absentCount} пропуски • {r.trainingsTracked} тренувань</span>
+                    </div>
                   ))
                 )}
-              </Stack>
-            </Paper>
-          </SimpleGrid>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="rounded-[var(--radius-section)] border border-border bg-card shadow-none">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <HeartPulse className="h-5 w-5 text-amber-500" />
+                Зведення статусів
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-4">
+              <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Присутні
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-emerald-500 tabular-nums">{globalSummary.presentCount}</div>
+              </div>
+              <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                  <XCircle className="h-4 w-4 text-rose-500" />
+                  Відсутні
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-rose-500 tabular-nums">{globalSummary.absentCount}</div>
+              </div>
+              <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                  <ShieldAlert className="h-4 w-4 text-amber-500" />
+                  Травми
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-amber-500 tabular-nums">{globalSummary.injuredCount}</div>
+              </div>
+              <div className="rounded-[var(--radius-inner)] border border-border bg-card/60 p-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                  <HeartPulse className="h-4 w-4 text-sky-500" />
+                  Хворі
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-sky-500 tabular-nums">{globalSummary.sickCount}</div>
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
-    </Stack>
+    </div>
   );
 }

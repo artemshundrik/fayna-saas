@@ -1,7 +1,5 @@
-@reference "tailwindcss";
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
 
 @layer base {
   :root {
@@ -34,11 +32,38 @@
     --ring: 221 83% 53%;
     
     --radius: 0.5rem;
+    --radius-lg: 12px;
+    --radius-md: 10px;
+    --radius-section: 32px;
+    --radius-inner: 16px;
+    --btn-radius: 12px;
 
     /* --- КНОПКИ (Gradient) --- */
     --btn-primary-grad-top: 221 83% 58%;
     --btn-primary-grad-bot: 221 83% 49%;
     --btn-primary-shadow: 221 83% 53%;
+
+    /* --- ТІНІ --- */
+    --shadow-surface: 0 10px 24px rgba(15, 23, 42, 0.08);
+    --shadow-floating: 0 16px 32px rgba(15, 23, 42, 0.14);
+    --shadow-pressed: 0 6px 14px rgba(15, 23, 42, 0.12);
+
+    /* --- BADGE TONES --- */
+    --neutral-soft: 220 14% 96%;
+    --neutral-soft-border: 220 13% 91%;
+    --neutral-foreground: 220 8% 45%;
+
+    --info-soft: 214 95% 93%;
+    --info-soft-border: 214 90% 86%;
+    --info-foreground: 221 83% 45%;
+
+    --success-soft: 142 72% 93%;
+    --success-soft-border: 142 60% 83%;
+    --success-foreground: 142 55% 30%;
+
+    --danger-soft: 0 84% 95%;
+    --danger-soft-border: 0 74% 86%;
+    --danger-foreground: 0 72% 40%;
   }
 
   .dark {
@@ -73,6 +98,32 @@
     /* --- КНОПКИ (Gradient Dark) --- */
     --btn-primary-grad-top: 217 92% 66%;
     --btn-primary-grad-bot: 217 90% 56%;
+
+    --radius-lg: 12px;
+    --radius-md: 10px;
+    --radius-section: 24px;
+    --radius-inner: 16px;
+    --btn-radius: 12px;
+
+    --shadow-surface: 0 12px 28px rgba(2, 6, 23, 0.55);
+    --shadow-floating: 0 18px 40px rgba(2, 6, 23, 0.65);
+    --shadow-pressed: 0 8px 16px rgba(2, 6, 23, 0.45);
+
+    --neutral-soft: 222 16% 20%;
+    --neutral-soft-border: 222 16% 26%;
+    --neutral-foreground: 215 20% 70%;
+
+    --info-soft: 217 70% 20%;
+    --info-soft-border: 217 70% 28%;
+    --info-foreground: 214 95% 75%;
+
+    --success-soft: 142 30% 20%;
+    --success-soft-border: 142 30% 28%;
+    --success-foreground: 142 70% 70%;
+
+    --danger-soft: 0 35% 22%;
+    --danger-soft-border: 0 35% 30%;
+    --danger-foreground: 0 80% 75%;
   }
 }
 
@@ -93,7 +144,12 @@
 
   /* 1. CONTAINER CARD */
   .hero-card-premium {
-    @apply relative overflow-hidden rounded-[2.5rem] transition-all duration-500 border;
+    position: relative;
+    overflow: hidden;
+    border-radius: 2.5rem;
+    transition: all 500ms;
+    border-width: 1px;
+    border-style: solid;
     
     /* LIGHT MODE: Чистий білий фон, темна рамка */
     background-color: #ffffff;
@@ -110,7 +166,13 @@
 
   /* 2. PLAYER NAME (Typography) */
   .hero-subtitle-name {
-    @apply text-sm font-bold uppercase tracking-[0.2em] mb-[-0.2em] block;
+    display: block;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: -0.2em;
     color: #64748b; /* slate-500 (Темно-сірий) */
   }
   .dark .hero-subtitle-name {
@@ -118,7 +180,11 @@
   }
 
   .hero-title-name {
-    @apply text-5xl lg:text-7xl xl:text-8xl font-black tracking-tight uppercase;
+    font-size: clamp(3rem, 5vw, 6rem);
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: -0.025em;
+    text-transform: uppercase;
     
     /* Light Mode: Темний "Графіт" */
     background: linear-gradient(180deg, #1e293b 0%, #475569 100%);
@@ -137,7 +203,8 @@
 
   /* 3. TEAM NAME */
   .hero-text-team {
-    @apply font-semibold tracking-wide;
+    font-weight: 600;
+    letter-spacing: 0.025em;
     color: #475569; /* slate-600 (Читабельний на білому) */
   }
   .dark .hero-text-team {
@@ -149,7 +216,15 @@
   /* ========================================= */
 
   .hero-stat-box {
-    @apply relative flex flex-col items-center justify-center p-4 rounded-2xl transition-all duration-300 overflow-hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    border-radius: 1.5rem;
+    transition: all 300ms;
+    overflow: hidden;
     
     /* LIGHT MODE: Світло-сірий фон, щоб виділятися на білій картці */
     background-color: #f1f5f9; /* slate-100 */
@@ -164,14 +239,23 @@
 
   /* --- MATCHES (Neutral) --- */
   .stat-val-neutral {
-    @apply text-3xl font-black tabular-nums tracking-tight;
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
     color: #0f172a; /* slate-900 (Чорний) */
   }
   .dark .stat-val-neutral {
     color: #ffffff; /* Білий */
   }
   .stat-lbl-neutral {
-    @apply text-[10px] uppercase font-extrabold tracking-widest mb-1;
+    font-size: 10px;
+    line-height: 1;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.25rem;
     color: #64748b; /* slate-500 */
   }
   .dark .stat-lbl-neutral {
@@ -180,7 +264,12 @@
 
   /* --- GOALS (Blue) --- */
   .stat-val-blue {
-    @apply text-3xl font-black tabular-nums tracking-tight transition-colors;
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+    transition: color 200ms;
     color: #2563eb; /* blue-600 (Яскраво синій) - ЧИТАБЕЛЬНИЙ НА БІЛОМУ */
   }
   .dark .stat-val-blue {
@@ -188,7 +277,10 @@
   }
   
   .stat-box-blue-hover {
-    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 300ms;
     /* Light Hover: дуже легкий синій */
     background-color: rgba(37, 99, 235, 0.05);
   }
@@ -203,7 +295,12 @@
 
   /* --- ASSISTS (Emerald) --- */
   .stat-val-emerald {
-    @apply text-3xl font-black tabular-nums tracking-tight transition-colors;
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+    transition: color 200ms;
     color: #059669; /* emerald-600 (Темно-зелений) */
   }
   .dark .stat-val-emerald {
@@ -211,7 +308,10 @@
   }
 
   .stat-box-emerald-hover {
-    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 300ms;
     background-color: rgba(5, 150, 105, 0.05);
   }
   .dark .stat-box-emerald-hover {
@@ -223,11 +323,220 @@
 
   /* --- LABELS for Stats --- */
   .stat-lbl {
-    @apply text-[10px] uppercase font-extrabold tracking-widest mb-1 z-10;
+    position: relative;
+    z-index: 10;
+    font-size: 10px;
+    line-height: 1;
+    text-transform: uppercase;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.25rem;
     color: #64748b; /* slate-500 */
   }
   .dark .stat-lbl {
     color: #94a3b8; /* slate-400 */
+  }
+}
+
+@layer components {
+  /* ========================================= */
+  /* 🎖️ Rating + Leader Badges                */
+  /* ========================================= */
+  .rating-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 9999px;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.01em;
+    border: 1px solid transparent;
+    box-shadow: none;
+  }
+
+  .rating-badge--bronze {
+    background: linear-gradient(135deg, #e6beaa 0%, #a87860 100%) !important;
+    border-color: rgba(255, 255, 255, 0.25) !important;
+    color: #431407 !important;
+  }
+  .rating-badge--silver {
+    background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+    color: #1e293b !important;
+  }
+  .rating-badge--gold {
+    background: linear-gradient(135deg, #e8c689 0%, #b7903c 100%) !important;
+    border-color: rgba(253, 230, 138, 0.4) !important;
+    color: #422006 !important;
+  }
+  .rating-badge--elite {
+    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 40%, #172554 100%) !important;
+    border-color: rgba(59, 130, 246, 0.4) !important;
+    color: #60a5fa !important;
+  }
+  .rating-badge--legendary {
+    background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 45%, #fff1f2 100%) !important;
+    border-color: rgba(220, 184, 102, 0.6) !important;
+    color: #a17a23 !important;
+  }
+
+  .dark .rating-badge--bronze {
+    background: linear-gradient(135deg, #6b4b3a 0%, #4b3328 100%) !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
+    color: #f2e4da !important;
+  }
+  .dark .rating-badge--silver {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: #e2e8f0 !important;
+  }
+  .dark .rating-badge--gold {
+    background: linear-gradient(135deg, #9a7a2e 0%, #6b4f1c 100%) !important;
+    border-color: rgba(253, 230, 138, 0.28) !important;
+    color: #fdecc8 !important;
+  }
+  .dark .rating-badge--elite {
+    background: linear-gradient(135deg, #0b132b 0%, #1e3a8a 40%, #102044 100%) !important;
+    border-color: rgba(59, 130, 246, 0.5) !important;
+    color: #bfdbfe !important;
+  }
+  .dark .rating-badge--legendary {
+    background: linear-gradient(135deg, #f2deb1 0%, #c6973a 100%) !important;
+    border-color: rgba(255, 214, 138, 0.5) !important;
+    color: #3a2606 !important;
+  }
+
+  .leader-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 20px !important;
+    padding: 0 6 !important;
+    border-radius: 9999px;
+    font-size: 11px !important;
+    font-weight: 800;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+    background-color: transparent;
+    line-height: 1 !important;
+  }
+  .leader-badge--goals {
+    background-color: rgba(59, 130, 246, 0.08) !important;
+    border-color: rgba(59, 130, 246, 0.25) !important;
+    color: #2563eb !important;
+  }
+  .leader-badge--assists {
+    background-color: rgba(16, 185, 129, 0.1) !important;
+    border-color: rgba(16, 185, 129, 0.3) !important;
+    color: #059669 !important;
+  }
+  .leader-badge--points {
+    background-color: rgba(124, 58, 237, 0.08) !important;
+    border-color: rgba(124, 58, 237, 0.25) !important;
+    color: #7c3aed !important;
+  }
+  .leader-badge--matches {
+    background-color: rgba(59, 130, 246, 0.08) !important;
+    border-color: rgba(147, 197, 253, 0.55) !important;
+    color: #0284c7 !important;
+  }
+  .leader-badge--discipline {
+    background-color: rgba(249, 115, 22, 0.1) !important;
+    border-color: rgba(249, 115, 22, 0.25) !important;
+    color: #ea580c !important;
+  }
+  .leader-badge--efficiency {
+    background-color: rgba(100, 116, 139, 0.1) !important;
+    border-color: rgba(148, 163, 184, 0.35) !important;
+    color: #64748b !important;
+  }
+
+  .dark .leader-badge--goals {
+    background-color: rgba(59, 130, 246, 0.18) !important;
+    border-color: rgba(59, 130, 246, 0.45) !important;
+    color: #93c5fd !important;
+  }
+  .dark .leader-badge--assists {
+    background-color: rgba(16, 185, 129, 0.2) !important;
+    border-color: rgba(16, 185, 129, 0.45) !important;
+    color: #a7f3d0 !important;
+  }
+  .dark .leader-badge--points {
+    background-color: rgba(124, 58, 237, 0.22) !important;
+    border-color: rgba(124, 58, 237, 0.5) !important;
+    color: #ddd6fe !important;
+  }
+  .dark .leader-badge--matches {
+    background-color: rgba(59, 130, 246, 0.22) !important;
+    border-color: rgba(147, 197, 253, 0.55) !important;
+    color: #bae6fd !important;
+  }
+  .dark .leader-badge--discipline {
+    background-color: rgba(249, 115, 22, 0.22) !important;
+    border-color: rgba(249, 115, 22, 0.5) !important;
+    color: #fdba74 !important;
+  }
+  .dark .leader-badge--efficiency {
+    background-color: rgba(148, 163, 184, 0.2) !important;
+    border-color: rgba(148, 163, 184, 0.45) !important;
+    color: #e2e8f0 !important;
+  }
+
+  .dark .rating-badge {
+    box-shadow: none;
+  }
+}
+
+@layer utilities {
+  .bg-neutral-soft {
+    background-color: hsl(var(--neutral-soft));
+  }
+  .border-neutral-soft-border {
+    border-color: hsl(var(--neutral-soft-border));
+  }
+  .text-neutral-foreground {
+    color: hsl(var(--neutral-foreground));
+  }
+
+  .bg-info-soft {
+    background-color: hsl(var(--info-soft));
+  }
+  .border-info-soft-border {
+    border-color: hsl(var(--info-soft-border));
+  }
+  .text-info-foreground {
+    color: hsl(var(--info-foreground));
+  }
+
+  .bg-success-soft {
+    background-color: hsl(var(--success-soft));
+  }
+  .border-success-soft-border {
+    border-color: hsl(var(--success-soft-border));
+  }
+  .text-success-foreground {
+    color: hsl(var(--success-foreground));
+  }
+
+  .bg-danger-soft {
+    background-color: hsl(var(--danger-soft));
+  }
+  .border-danger-soft-border {
+    border-color: hsl(var(--danger-soft-border));
+  }
+  .text-danger-foreground {
+    color: hsl(var(--danger-foreground));
+  }
+
+  .form-dot-neutral {
+    background-color: #cbd5e1;
+  }
+  .dark .form-dot-neutral {
+    background-color: #475569;
   }
 }
 

@@ -1982,6 +1982,7 @@ export function StatsPage() {
                             <Badge
                               variant="outline"
                               pill
+                              size="sm"
                               className={cn(
                                 "leader-badge",
                                 badgeTone

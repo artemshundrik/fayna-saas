@@ -22,7 +22,7 @@ import {
 
 import { cn } from "@/lib/utils";
 // Імпортуємо картку (переконайтеся, що шлях правильний до вашого файлу StatsPageFinal)
-import { FifaCard } from "./StatsPageFinal"; 
+import { FifaCard } from "./StatsPage"; 
 
 // --- TYPES ---
 type Player = {
