@@ -1,0 +1,747 @@
+// src/layout/AppLayout.tsx
+import React, { ReactNode, useEffect, useMemo, useState } from "react";
+import { Link, matchPath, useLocation, useNavigate } from "react-router-dom";
+import {
+  LayoutGrid,
+  Users,
+  Trophy,
+  BarChart3,
+  Layers,
+  Bell,
+  ChevronRight,
+  Palette,
+  MoreVertical,
+  Search,
+  Blocks,
+  ChevronDown,
+  Menu,
+  Settings,
+  LogOut,
+  User,
+  Sparkles,
+  SlidersHorizontal,
+  FolderKanban,
+  Sun,
+  Moon,
+  ClipboardCheck,
+  LineChart,
+  Swords,
+  Dumbbell,
+  UserRound,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+
+import { supabase } from "@/lib/supabaseClient";
+
+import { CommandPalette } from "@/components/app/CommandPalette";
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+
+// --- Types ---
+type AppLayoutProps = {
+  children: ReactNode;
+};
+
+type SidebarGroupKey = "team" | "analytics" | "management" | "dev";
+
+type SidebarLink = {
+  label: string;
+  to: string;
+  group: SidebarGroupKey;
+  icon: React.ElementType;
+};
+
+type HeaderConfig = {
+  title: string;
+  subtitle: string;
+  breadcrumbLabel: string;
+  breadcrumbTo: string;
+};
+
+type MatchMeta = {
+  opponent_name: string;
+  match_date: string;
+  score_team: number | null;
+  score_opponent: number | null;
+};
+
+// --- Routes ---
+const ROUTES = {
+  overview: "/overview",
+
+  matches: "/matches-shadcn",
+  trainings: "/admin/trainings",
+  players: "/admin/players",
+  tournaments: "/admin/tournaments",
+
+ analyticsPlayers: "/analytics/players",
+analyticsTeam: "/analytics/team",
+
+
+  attendance: "/admin/trainings/analytics", // реюз існуючої сторінки
+
+  // dev-only
+  designSystem: "/design-system",
+  playground: "/playground",
+
+  workspaceSettings: "/workspace-settings",
+  accountSettings: "/account-settings",
+  profile: "/profile",
+} as const;
+
+// --- Sidebar Config ---
+const baseSidebarLinks: SidebarLink[] = [
+  // TEAM
+  { label: "Огляд", to: ROUTES.overview, group: "team", icon: LayoutGrid },
+  { label: "Матчі", to: ROUTES.matches, group: "team", icon: Swords },
+  { label: "Тренування", to: ROUTES.trainings, group: "team", icon: Dumbbell },
+  { label: "Гравці", to: ROUTES.players, group: "team", icon: UserRound },
+  { label: "Турніри", to: ROUTES.tournaments, group: "team", icon: Trophy },
+
+  // ANALYTICS
+  { label: "Статистика гравців", to: ROUTES.analyticsPlayers, group: "analytics", icon: BarChart3 },
+  { label: "Аналітика команди", to: ROUTES.analyticsTeam, group: "analytics", icon: LineChart },
+
+  // MANAGEMENT
+  { label: "Відвідуваність", to: ROUTES.attendance, group: "management", icon: ClipboardCheck },
+];
+
+// dev links (тільки в dev-режимі)
+const devSidebarLinks: SidebarLink[] = [
+  { label: "Design System", to: ROUTES.designSystem, group: "dev", icon: Palette },
+  { label: "Playground", to: ROUTES.playground, group: "dev", icon: Blocks },
+];
+
+const isDev = (() => {
+  try {
+    // Vite
+    return typeof import.meta !== "undefined" && (import.meta as any).env?.DEV;
+  } catch {
+    return false;
+  }
+})();
+
+const sidebarLinks: SidebarLink[] = isDev ? [...baseSidebarLinks, ...devSidebarLinks] : baseSidebarLinks;
+
+// --- Header Logic ---
+const getHeaderConfig = (pathname: string): HeaderConfig => {
+  if (pathname === ROUTES.overview)
+    return {
+      title: "Огляд",
+      subtitle: "Пульс команди, найближчі події та швидкі дії.",
+      breadcrumbLabel: "Огляд",
+      breadcrumbTo: ROUTES.overview,
+    };
+
+  if (pathname === ROUTES.designSystem)
+    return {
+      title: "Дизайн-система",
+      subtitle: "UI компоненти, токени та гайдлайни.",
+      breadcrumbLabel: "Design System",
+      breadcrumbTo: ROUTES.designSystem,
+    };
+
+  if (pathname === ROUTES.playground)
+    return {
+      title: "UI Playground",
+      subtitle: "Тестування компонентів у реальних сценаріях.",
+      breadcrumbLabel: "Playground",
+      breadcrumbTo: ROUTES.playground,
+    };
+
+  if (pathname === ROUTES.analyticsTeam)
+    return {
+      title: "Аналітика команди",
+      subtitle: "Тренди, форма та інсайти (висновки, не таблиці).",
+      breadcrumbLabel: "Аналітика команди",
+      breadcrumbTo: ROUTES.analyticsTeam,
+    };
+
+  if (pathname.includes("analytics"))
+    return {
+      title: "Статистика гравців",
+      subtitle: "Голи, асисти та інші метрики по гравцях з фільтрами.",
+      breadcrumbLabel: "Статистика гравців",
+      breadcrumbTo: ROUTES.analyticsPlayers,
+    };
+
+  if (pathname.includes("players"))
+    return {
+      title: "Гравці",
+      subtitle: "Склад команди та профілі гравців.",
+      breadcrumbLabel: "Гравці",
+      breadcrumbTo: ROUTES.players,
+    };
+
+  if (pathname.startsWith("/player/"))
+    return {
+      title: "Профіль гравця",
+      subtitle: "Статистика, матчі та участь у тренуваннях.",
+      breadcrumbLabel: "Гравці",
+      breadcrumbTo: ROUTES.players,
+    };
+
+  if (pathname.includes("matches-shadcn"))
+    return {
+      title: "Матчі",
+      subtitle: "Розклад, результати та події матчу.",
+      breadcrumbLabel: "Матчі",
+      breadcrumbTo: ROUTES.matches,
+    };
+
+  if (pathname.includes("trainings/analytics"))
+    return {
+      title: "Відвідуваність",
+      subtitle: "Хто ходить, хто пропускає, серії та % по команді.",
+      breadcrumbLabel: "Відвідуваність",
+      breadcrumbTo: ROUTES.attendance,
+    };
+
+  if (pathname.includes("trainings"))
+    return {
+      title: "Тренування",
+      subtitle: "Планування, відвідуваність та нотатки.",
+      breadcrumbLabel: "Тренування",
+      breadcrumbTo: ROUTES.trainings,
+    };
+
+  if (pathname.includes("tournaments"))
+    return {
+      title: "Турніри",
+      subtitle: "Сезони, формати, матчі та таблиці.",
+      breadcrumbLabel: "Турніри",
+      breadcrumbTo: ROUTES.tournaments,
+    };
+
+  // fallback
+  return {
+    title: "Огляд",
+    subtitle: "Пульс команди, найближчі події та швидкі дії.",
+    breadcrumbLabel: "Огляд",
+    breadcrumbTo: ROUTES.overview,
+  };
+};
+
+// --- Small helpers ---
+function isActivePath(currentPath: string, to: string) {
+  return currentPath === to || currentPath.startsWith(to + "/");
+}
+
+type ThemeMode = "light" | "dark";
+
+function getInitialTheme(): ThemeMode {
+  try {
+    const stored = localStorage.getItem("theme");
+    if (stored === "light" || stored === "dark") return stored;
+    const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches;
+    return prefersDark ? "dark" : "light";
+  } catch {
+    return "light";
+  }
+}
+
+function applyTheme(mode: ThemeMode) {
+  const root = document.documentElement;
+  root.classList.toggle("dark", mode === "dark");
+  try {
+    localStorage.setItem("theme", mode);
+  } catch {
+    // ignore
+  }
+}
+
+function formatDateTimeUA(iso: string) {
+  const d = new Date(iso);
+  const date = new Intl.DateTimeFormat("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(d);
+  const time = new Intl.DateTimeFormat("uk-UA", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+  return `${date} • ${time}`;
+}
+
+export function AppLayout({ children }: AppLayoutProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
+
+  // /matches/:matchId/events
+  const matchEventsRoute = useMemo(() => {
+    return matchPath({ path: "/matches/:matchId/events", end: true }, location.pathname);
+  }, [location.pathname]);
+
+  const matchDetailsRoute = useMemo(() => {
+    return matchPath({ path: "/matches/:matchId", end: true }, location.pathname);
+  }, [location.pathname]);
+
+  const matchId =
+    ((matchEventsRoute?.params as { matchId?: string } | undefined)?.matchId) ||
+    ((matchDetailsRoute?.params as { matchId?: string } | undefined)?.matchId);
+
+  const [matchMeta, setMatchMeta] = useState<MatchMeta | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMatchMeta() {
+      if (!matchId) {
+        setMatchMeta(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("matches")
+        .select("opponent_name, match_date, score_team, score_opponent")
+        .eq("id", matchId)
+        .single();
+
+      if (cancelled) return;
+
+      if (error || !data) {
+        setMatchMeta(null);
+        return;
+      }
+
+      setMatchMeta(data as MatchMeta);
+    }
+
+    loadMatchMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId]);
+
+  const header = useMemo(() => {
+    if (!matchId) return baseHeader;
+
+    const score =
+      matchMeta && matchMeta.score_team !== null && matchMeta.score_opponent !== null
+        ? `${matchMeta.score_team}:${matchMeta.score_opponent}`
+        : "—:—";
+
+    const metaSubtitle = matchMeta
+      ? `${matchMeta.opponent_name} • ${formatDateTimeUA(matchMeta.match_date)} • ${score}`
+      : "Деталі матчу, склад, події та статистика.";
+
+    if (matchEventsRoute) {
+      return {
+        title: "Події матчу",
+        subtitle: matchMeta
+          ? `${matchMeta.opponent_name} • ${formatDateTimeUA(matchMeta.match_date)} • ${score}`
+          : "Голи, асисти, картки та відвідуваність матчу.",
+        breadcrumbLabel: "Матчі",
+        breadcrumbTo: ROUTES.matches,
+      };
+    }
+
+    return {
+      title: "Деталі матчу",
+      subtitle: metaSubtitle,
+      breadcrumbLabel: "Матчі",
+      breadcrumbTo: ROUTES.matches,
+    };
+  }, [baseHeader, matchId, matchMeta, matchEventsRoute]);
+
+  const [cmdkOpen, setCmdkOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+  };
+
+  return (
+    <div className="min-h-screen bg-background text-foreground selection:bg-primary/20 selection:text-primary">
+      {/* DESKTOP SIDEBAR */}
+      <aside className="hidden md:flex fixed inset-y-0 z-30 w-[270px] flex-col border-r border-border bg-card/60 backdrop-blur-xl">
+        {/* Workspace / Brand */}
+        <div className="px-4 pt-5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  "w-full rounded-xl px-2.5 py-2.5 text-left transition-colors",
+                  "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+                    <LayoutGrid className="h-4 w-4" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-[13px] font-semibold tracking-tight">FAYNA TEAM</span>
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <div className="mt-0.5 text-[11px] font-medium text-muted-foreground">Workspace</div>
+                  </div>
+
+                  <div className="ml-auto hidden lg:flex items-center gap-1 rounded-md bg-muted/50 px-2 py-1 text-[10px] text-muted-foreground">
+                    <Sparkles className="h-3 w-3" />
+                    Pro
+                  </div>
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent className="w-[250px]" align="start">
+              <DropdownMenuLabel>Workspace</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => navigate(ROUTES.overview)}>
+                  <FolderKanban className="mr-2 h-4 w-4" />
+                  FAYNA TEAM
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate(ROUTES.workspaceSettings)}>
+                <Settings className="mr-2 h-4 w-4" />
+                Налаштування workspace
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Search (Cmd+K) */}
+        <div className="px-4 pt-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              readOnly
+              value=""
+              placeholder="Пошук…"
+              className={cn(
+                "h-10 rounded-xl pl-10 pr-16 bg-background/60",
+                "border border-input",
+                "cursor-pointer",
+                "focus-visible:ring-2 focus-visible:ring-primary/30"
+              )}
+              onClick={() => setCmdkOpen(true)}
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+              <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
+                <span className="text-[11px]">⌘</span>K
+              </kbd>
+            </div>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
+          <SidebarGroup
+            label="Команда"
+            links={sidebarLinks.filter((l) => l.group === "team")}
+            currentPath={location.pathname}
+          />
+          <SidebarGroup
+            label="Аналітика"
+            links={sidebarLinks.filter((l) => l.group === "analytics")}
+            currentPath={location.pathname}
+          />
+          <SidebarGroup
+            label="Управління"
+            links={sidebarLinks.filter((l) => l.group === "management")}
+            currentPath={location.pathname}
+          />
+          {isDev && (
+            <SidebarGroup
+              label="Dev"
+              links={sidebarLinks.filter((l) => l.group === "dev")}
+              currentPath={location.pathname}
+            />
+          )}
+        </nav>
+
+        {/* Footer / Profile */}
+        <div className="border-t border-border p-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={cn(
+                  "w-full rounded-xl p-2.5 transition-colors",
+                  "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-9 w-9 rounded-xl border border-border">
+                    <AvatarFallback className="rounded-xl bg-muted text-xs font-semibold text-muted-foreground">
+                      AS
+                    </AvatarFallback>
+                  </Avatar>
+
+                  <div className="min-w-0 flex-1 text-left">
+                    <div className="truncate text-[13px] font-semibold">Artem Shundryk</div>
+                    <div className="truncate text-[11px] text-muted-foreground">Senior UI/UX</div>
+                  </div>
+
+                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent className="w-[250px]" align="end">
+              <DropdownMenuLabel>Акаунт</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => navigate(ROUTES.profile)}>
+                <User className="mr-2 h-4 w-4" />
+                Мій профіль
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={() => navigate(ROUTES.accountSettings)}>
+                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                Налаштування
+              </DropdownMenuItem>
+
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => {}}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Вийти
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </aside>
+
+      {/* MAIN */}
+      <div className="md:pl-[270px]">
+        {/* HEADER */}
+        <header className="sticky top-0 z-20 border-b border-border bg-background/75 backdrop-blur-xl">
+          <div className="flex h-16 items-center justify-between px-4 md:px-6">
+            <div className="flex items-center gap-3">
+              {/* Mobile menu */}
+              <div className="md:hidden">
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl">
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+
+                  <SheetContent side="left" className="w-[310px] p-0">
+                    <SheetHeader className="p-4 pb-2">
+                      <SheetTitle>FAYNA TEAM</SheetTitle>
+                    </SheetHeader>
+
+                    <div className="px-4 pb-3">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          readOnly
+                          value=""
+                          placeholder="Пошук…"
+                          className={cn(
+                            "h-10 rounded-xl pl-10 pr-16 bg-background/60",
+                            "border border-input",
+                            "cursor-pointer",
+                            "focus-visible:ring-2 focus-visible:ring-primary/30"
+                          )}
+                          onClick={() => setCmdkOpen(true)}
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                          <kbd className="pointer-events-none inline-flex h-6 select-none items-center gap-1 rounded-md border border-border bg-muted px-2 font-mono text-[10px] font-medium text-muted-foreground">
+                            <span className="text-[11px]">⌘</span>K
+                          </kbd>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-4 pb-5">
+                      <MobileNav currentPath={location.pathname} isDev={isDev} />
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
+
+              {/* Breadcrumb */}
+              <div className="hidden md:flex items-center text-xs font-medium text-muted-foreground">
+                <Link
+                  to={ROUTES.overview}
+                  className="rounded-md px-1.5 py-1 hover:bg-muted/60 hover:text-foreground transition-colors"
+                >
+                  FAYNA TEAM
+                </Link>
+                <ChevronRight className="h-3.5 w-3.5 mx-1.5 text-muted-foreground/80" />
+                <Link
+                  to={header.breadcrumbTo}
+                  className="rounded-md bg-muted/50 px-2 py-1 text-foreground hover:bg-muted transition-colors"
+                >
+                  {header.breadcrumbLabel}
+                </Link>
+              </div>
+
+              {/* Mobile title */}
+              <div className="md:hidden">
+                <div className="text-sm font-semibold leading-none">{header.title}</div>
+                <div className="mt-1 text-[11px] text-muted-foreground line-clamp-1">{header.subtitle}</div>
+              </div>
+            </div>
+
+            {/* RIGHT ACTIONS */}
+            <div className="flex items-center gap-2.5">
+              {/* Theme toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground"
+                onClick={toggleTheme}
+                aria-label={theme === "dark" ? "Увімкнути світлу тему" : "Увімкнути темну тему"}
+                title={theme === "dark" ? "Світла тема" : "Темна тема"}
+              >
+                {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground"
+                aria-label="Сповіщення"
+                title="Сповіщення"
+              >
+                <Bell className="h-4.5 w-4.5" />
+              </Button>
+
+            </div>
+          </div>
+        </header>
+
+        {/* CONTENT */}
+        <main className="px-4 py-6 md:px-6 lg:px-10">
+          <div className="mx-auto max-w-6xl space-y-8">
+            {/* Page header (desktop) */}
+            <div className="hidden md:flex flex-col gap-1">
+              <h1 className="text-2xl font-semibold tracking-tight">{header.title}</h1>
+              <p className="text-sm text-muted-foreground">{header.subtitle}</p>
+            </div>
+
+            <div className="animate-in fade-in-50 duration-500">{children}</div>
+          </div>
+        </main>
+      </div>
+
+      <CommandPalette open={cmdkOpen} onOpenChange={setCmdkOpen} />
+    </div>
+  );
+}
+
+function SidebarGroup({
+  label,
+  links,
+  currentPath,
+}: {
+  label: string;
+  links: SidebarLink[];
+  currentPath: string;
+}) {
+  if (links.length === 0) return null;
+
+  return (
+    <div className="space-y-2">
+      <h4 className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+        {label}
+      </h4>
+
+      <div className="space-y-1">
+        {links.map((link) => {
+          const active = isActivePath(currentPath, link.to);
+          const Icon = link.icon;
+
+          return (
+            <Link
+              key={link.to}
+              to={link.to}
+              className={cn(
+                "relative group flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] font-medium transition-colors",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                active
+                  ? "bg-primary/10 text-foreground"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute left-1 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-full transition-opacity",
+                  active ? "bg-primary opacity-100" : "bg-primary opacity-0 group-hover:opacity-40"
+                )}
+              />
+
+              <Icon
+                className={cn(
+                  "h-4 w-4 transition-colors",
+                  active ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                )}
+              />
+
+              <span className="truncate">{link.label}</span>
+
+              <span
+                className={cn(
+                  "ml-auto h-1.5 w-1.5 rounded-full transition-opacity",
+                  active ? "bg-primary opacity-100" : "bg-primary opacity-0 group-hover:opacity-40"
+                )}
+              />
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MobileNav({ currentPath, isDev }: { currentPath: string; isDev: boolean }) {
+  return (
+    <div className="space-y-5">
+      <SidebarGroup label="Команда" links={sidebarLinks.filter((l) => l.group === "team")} currentPath={currentPath} />
+      <SidebarGroup
+        label="Аналітика"
+        links={sidebarLinks.filter((l) => l.group === "analytics")}
+        currentPath={currentPath}
+      />
+      <SidebarGroup
+        label="Управління"
+        links={sidebarLinks.filter((l) => l.group === "management")}
+        currentPath={currentPath}
+      />
+      {isDev && (
+        <SidebarGroup label="Dev" links={sidebarLinks.filter((l) => l.group === "dev")} currentPath={currentPath} />
+      )}
+
+      <div className="pt-2 border-t border-border">
+        <div className="flex items-center gap-3 rounded-xl p-3 bg-muted/40">
+          <Avatar className="h-9 w-9 rounded-xl border border-border">
+            <AvatarFallback className="rounded-xl bg-muted text-xs font-semibold text-muted-foreground">
+              AS
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-semibold">Artem Shundryk</div>
+            <div className="truncate text-[11px] text-muted-foreground">Senior UI/UX</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

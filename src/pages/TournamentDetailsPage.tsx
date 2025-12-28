@@ -1,0 +1,429 @@
+// src/pages/TournamentDetailsPage.tsx
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
+import { cn } from "@/lib/utils";
+
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+import { ArrowLeft, ArrowRight, CalendarDays, Trophy } from "lucide-react";
+
+/* ================= TYPES ================= */
+
+type Tournament = {
+  id: string;
+  name: string;
+  season: string | null;
+  league_name: string | null;
+  age_group: string | null;
+  external_url: string | null;
+  logo_url: string | null;
+};
+
+type TeamTournamentRow = {
+  is_primary: boolean;
+  tournament: Tournament | null;
+};
+
+type MatchStatus = "scheduled" | "played" | "canceled";
+
+type MatchRow = {
+  id: string;
+  opponent_name: string;
+  match_date: string;
+  status: MatchStatus;
+  score_team: number | null;
+  score_opponent: number | null;
+  home_away: "home" | "away" | "neutral";
+  opponent_logo_url?: string | null;
+  tournament_id: string | null;
+  stage: string | null;
+  matchday: number | null;
+};
+
+type Player = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  shirt_number: number | null;
+  photo_url: string | null;
+};
+
+/* ================= CONFIG ================= */
+
+const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
+
+/* ================= HELPERS ================= */
+
+function formatDateTimeUA(iso: string) {
+  const d = new Date(iso);
+  const date = new Intl.DateTimeFormat("uk-UA", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(d);
+  const time = new Intl.DateTimeFormat("uk-UA", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+  return `${date} • ${time}`;
+}
+
+function matchStatusBadge(
+  status: MatchStatus,
+  scoreTeam: number | null,
+  scoreOpp: number | null
+) {
+  if (status === "scheduled") return <Badge variant="secondary">Запланований</Badge>;
+  if (status === "canceled") return <Badge variant="outline">Скасований</Badge>;
+  if (scoreTeam == null || scoreOpp == null) return <Badge variant="secondary">Зіграний</Badge>;
+  if (scoreTeam > scoreOpp) return <Badge variant="default">Перемога</Badge>;
+  if (scoreTeam < scoreOpp) return <Badge variant="destructive">Поразка</Badge>;
+  return <Badge variant="secondary">Нічия</Badge>;
+}
+
+function playerInitials(firstName: string, lastName: string) {
+  return `${(firstName || "")[0] ?? ""}${(lastName || "")[0] ?? ""}`.trim().toUpperCase() || "•";
+}
+
+function PlayerAvatar({ player, size = 36 }: { player: Player; size?: number }) {
+  const initials = playerInitials(player.first_name, player.last_name);
+  return (
+    <div
+      className="grid place-items-center overflow-hidden rounded-full bg-muted ring-1 ring-border shrink-0"
+      style={{ width: size, height: size }}
+      title={`${player.last_name} ${player.first_name}`.trim()}
+    >
+      {player.photo_url ? (
+        <img src={player.photo_url} alt={player.last_name} className="h-full w-full object-cover" loading="lazy" />
+      ) : (
+        <span className="text-[10px] font-bold text-muted-foreground">{initials}</span>
+      )}
+    </div>
+  );
+}
+
+/* ================= PAGE ================= */
+
+export function TournamentDetailsPage() {
+  const { id } = useParams<{ id: string }>();
+
+  const [loading, setLoading] = useState(true);
+  const [playersLoading, setPlayersLoading] = useState(true);
+  const [rosterSavingId, setRosterSavingId] = useState<string | null>(null);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+
+  const [tRow, setTRow] = useState<TeamTournamentRow | null>(null);
+  const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [registeredIds, setRegisteredIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      if (!id) return;
+
+      setLoading(true);
+      setPlayersLoading(true);
+
+      const [
+        tournamentRes,
+        matchesRes,
+        playersRes,
+        regRes,
+      ] = await Promise.all([
+        supabase
+          .from("team_tournaments")
+          .select(`
+            is_primary,
+            tournament:tournament_id (
+              id,
+              name,
+              season,
+              league_name,
+              age_group,
+              external_url,
+              logo_url
+            )
+          `)
+          .eq("team_id", TEAM_ID)
+          .eq("tournament_id", id)
+          .maybeSingle(),
+
+        supabase
+          .from("matches")
+          .select(`
+            id,
+            opponent_name,
+            match_date,
+            status,
+            score_team,
+            score_opponent,
+            home_away,
+            opponent_logo_url,
+            tournament_id,
+            stage,
+            matchday
+          `)
+          .eq("team_id", TEAM_ID)
+          .eq("tournament_id", id)
+          .order("match_date", { ascending: false }),
+
+        supabase
+          .from("players")
+          .select("id, first_name, last_name, shirt_number, photo_url")
+          .eq("team_id", TEAM_ID)
+          .order("last_name"),
+
+        supabase
+          .from("team_tournament_players")
+          .select("player_id")
+          .eq("team_id", TEAM_ID)
+          .eq("tournament_id", id),
+      ]);
+
+      if (cancelled) return;
+
+      const row = (tournamentRes.data ?? null) as TeamTournamentRow | null;
+      setTRow(row && row.tournament ? row : null);
+      setMatches((matchesRes.data ?? []) as MatchRow[]);
+      setPlayers((playersRes.data ?? []) as Player[]);
+      setRegisteredIds(
+        new Set((regRes.data ?? []).map((r) => r.player_id))
+      );
+
+      setLoading(false);
+      setPlayersLoading(false);
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, [id]);
+
+  const tournament = tRow?.tournament ?? null;
+
+  const header = useMemo(() => {
+    if (loading) {
+      return (
+        <div className="flex items-start justify-between gap-4">
+          <Skeleton className="h-14 w-14 rounded-xl" />
+          <Skeleton className="h-9 w-28 rounded-xl" />
+        </div>
+      );
+    }
+
+    if (!tournament) {
+      return (
+        <Button asChild variant="outline" className="rounded-xl">
+          <Link to="/admin/tournaments">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Назад
+          </Link>
+        </Button>
+      );
+    }
+
+    return (
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-muted">
+            {tournament.logo_url ? (
+              <img src={tournament.logo_url} className="h-12 w-12 object-contain" />
+            ) : (
+              <Trophy className="h-6 w-6 text-muted-foreground" />
+            )}
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="text-lg font-semibold">{tournament.name}</div>
+              {tRow?.is_primary && <Badge variant="secondary">Основний</Badge>}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {tournament.league_name} {tournament.season && `• ${tournament.season}`}
+            </div>
+          </div>
+        </div>
+
+        <Button asChild variant="outline" className="rounded-xl">
+          <Link to="/admin/tournaments">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Турніри
+          </Link>
+        </Button>
+      </div>
+    );
+  }, [loading, tournament, tRow]);
+
+  return (
+    <div className="space-y-4">
+      {/* HEADER */}
+      <Card className="rounded-[var(--radius-section)]">
+        <CardContent className="p-4">{header}</CardContent>
+      </Card>
+
+      {/* TABS */}
+      <Card className="rounded-[var(--radius-section)]">
+        <Tabs defaultValue="roster">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <CardTitle className="text-base">Турнір</CardTitle>
+              <TabsList>
+                <TabsTrigger value="roster">Заявка на турнір</TabsTrigger>
+                <TabsTrigger value="matches">Матчі</TabsTrigger>
+              </TabsList>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            <TabsContent value="roster" className="mt-0">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm text-muted-foreground">
+                  У заявці: <span className="font-semibold text-foreground tabular-nums">{registeredIds.size}</span>
+                </div>
+                <Badge variant="secondary" className="rounded-full">Клік по гравцю = toggle</Badge>
+              </div>
+
+              <Separator className="my-4" />
+
+              {rosterError ? (
+                <div className="mb-4 rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {rosterError}
+                </div>
+              ) : null}
+
+              {playersLoading ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {Array(6).fill(0).map((_, i) => (
+                    <Skeleton key={i} className="h-16 rounded-2xl" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {players.map((p) => {
+                    const checked = registeredIds.has(p.id);
+
+                    const saving = rosterSavingId === p.id;
+
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={async () => {
+                          if (!id) return;
+                          if (saving) return;
+
+                          setRosterError(null);
+                          setRosterSavingId(p.id);
+
+                          if (checked) {
+                            const { error } = await supabase
+                              .from("team_tournament_players")
+                              .delete()
+                              .eq("team_id", TEAM_ID)
+                              .eq("tournament_id", id)
+                              .eq("player_id", p.id);
+
+                            if (error) {
+                              setRosterError(error.message || "Не вдалося видалити зі заявки");
+                            } else {
+                              setRegisteredIds(prev => {
+                                const n = new Set(prev);
+                                n.delete(p.id);
+                                return n;
+                              });
+                            }
+                          } else {
+                            const { error } = await supabase
+                              .from("team_tournament_players")
+                              .insert({
+                                team_id: TEAM_ID,
+                                tournament_id: id,
+                                player_id: p.id,
+                              });
+
+                            if (error) {
+                              setRosterError(error.message || "Не вдалося додати у заявку");
+                            } else {
+                              setRegisteredIds(prev => new Set(prev).add(p.id));
+                            }
+                          }
+                          setRosterSavingId(null);
+                        }}
+                        className={cn(
+                          "flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left",
+                          "transition-colors hover:bg-muted/40",
+                          checked ? "border-primary/30 bg-primary/5" : "border-border bg-card/40",
+                          saving ? "opacity-70 cursor-wait" : ""
+                        )}
+                        disabled={saving}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <PlayerAvatar player={p} size={36} />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-foreground">
+                              {p.last_name} {p.first_name}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {p.shirt_number ? `#${p.shirt_number}` : "Без номера"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <Badge variant={checked ? "default" : "secondary"} className="rounded-full">
+                          {checked ? "У заявці" : "Не у заявці"}
+                        </Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="matches" className="mt-0">
+              {matches.length === 0 ? (
+                <div className="rounded-2xl border border-border bg-card/40 p-6 text-center text-sm text-muted-foreground">
+                  Поки немає матчів у цьому турнірі.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {matches.map((m) => (
+                    <Link
+                      key={m.id}
+                      to={`/matches/${m.id}`}
+                      className={cn("block rounded-2xl border p-4 hover:bg-muted/40")}
+                    >
+                      <div className="flex justify-between">
+                        <div>
+                          <div className="flex gap-2">
+                            <span className="font-medium">{m.opponent_name}</span>
+                            {matchStatusBadge(m.status, m.score_team, m.score_opponent)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            <CalendarDays className="inline h-3.5 w-3.5 mr-1" />
+                            {formatDateTimeUA(m.match_date)}
+                          </div>
+                        </div>
+
+                        <div className="text-lg font-bold">
+                          {m.score_team != null ? `${m.score_team}:${m.score_opponent}` : "—"}
+                        </div>
+                      </div>
+                      <Separator className="mt-3" />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </CardContent>
+        </Tabs>
+      </Card>
+    </div>
+  );
+}

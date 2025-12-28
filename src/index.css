@@ -1,0 +1,240 @@
+@reference "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* --- ОСНОВНІ КОЛЬОРИ (СВІТЛА ТЕМА) --- */
+    --background: 240 5% 96%; /* Світло-сірий фон сторінки */
+    --foreground: 240 10% 3.9%; /* Майже чорний текст */
+    
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+    
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 222 47% 11%;
+    
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 222 47% 11%;
+    
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 221 83% 53%;
+    
+    --radius: 0.5rem;
+
+    /* --- КНОПКИ (Gradient) --- */
+    --btn-primary-grad-top: 221 83% 58%;
+    --btn-primary-grad-bot: 221 83% 49%;
+    --btn-primary-shadow: 221 83% 53%;
+  }
+
+  .dark {
+    /* --- ОСНОВНІ КОЛЬОРИ (ТЕМНА ТЕМА) --- */
+    --background: 222 18% 11%; /* Темно-синій фон */
+    --foreground: 210 40% 98%; /* Білий текст */
+    
+    --card: 222 18% 14%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 18% 13%;
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 18% 11%;
+    
+    --secondary: 222 18% 20%;
+    --secondary-foreground: 210 40% 98%;
+    
+    --muted: 222 18% 18%;
+    --muted-foreground: 215 20% 65%;
+    
+    --accent: 222 18% 18%;
+    --accent-foreground: 210 40% 98%;
+    
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 222 18% 22%;
+    --input: 222 18% 22%;
+    --ring: 217 91% 60%;
+
+    /* --- КНОПКИ (Gradient Dark) --- */
+    --btn-primary-grad-top: 217 92% 66%;
+    --btn-primary-grad-bot: 217 90% 56%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  /* ========================================= */
+  /* 🦸‍♂️ HERO SECTION (FIXED CONTRAST)        */
+  /* ========================================= */
+
+  /* 1. CONTAINER CARD */
+  .hero-card-premium {
+    @apply relative overflow-hidden rounded-[2.5rem] transition-all duration-500 border;
+    
+    /* LIGHT MODE: Чистий білий фон, темна рамка */
+    background-color: #ffffff;
+    border-color: #e2e8f0; /* slate-200 */
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.08); 
+  }
+
+  .dark .hero-card-premium {
+    /* DARK MODE: Глибокий градієнт */
+    background: linear-gradient(135deg, #1e293b 0%, #020617 100%);
+    border-color: rgba(255,255,255,0.08);
+    box-shadow: 0 25px 50px -12px rgba(2, 6, 23, 0.7);
+  }
+
+  /* 2. PLAYER NAME (Typography) */
+  .hero-subtitle-name {
+    @apply text-sm font-bold uppercase tracking-[0.2em] mb-[-0.2em] block;
+    color: #64748b; /* slate-500 (Темно-сірий) */
+  }
+  .dark .hero-subtitle-name {
+    color: #94a3b8; /* slate-400 (Світло-сірий) */
+  }
+
+  .hero-title-name {
+    @apply text-5xl lg:text-7xl xl:text-8xl font-black tracking-tight uppercase;
+    
+    /* Light Mode: Темний "Графіт" */
+    background: linear-gradient(180deg, #1e293b 0%, #475569 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .dark .hero-title-name {
+    /* Dark Mode: Біле срібло */
+    background: linear-gradient(180deg, #ffffff 10%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+  }
+
+  /* 3. TEAM NAME */
+  .hero-text-team {
+    @apply font-semibold tracking-wide;
+    color: #475569; /* slate-600 (Читабельний на білому) */
+  }
+  .dark .hero-text-team {
+    color: #cbd5e1; /* slate-300 */
+  }
+
+  /* ========================================= */
+  /* 📊 STATS BOXES (CRITICAL FIX)             */
+  /* ========================================= */
+
+  .hero-stat-box {
+    @apply relative flex flex-col items-center justify-center p-4 rounded-2xl transition-all duration-300 overflow-hidden;
+    
+    /* LIGHT MODE: Світло-сірий фон, щоб виділятися на білій картці */
+    background-color: #f1f5f9; /* slate-100 */
+    border: 1px solid #e2e8f0; /* slate-200 */
+  }
+  
+  .dark .hero-stat-box {
+    /* DARK MODE: Прозоре скло */
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* --- MATCHES (Neutral) --- */
+  .stat-val-neutral {
+    @apply text-3xl font-black tabular-nums tracking-tight;
+    color: #0f172a; /* slate-900 (Чорний) */
+  }
+  .dark .stat-val-neutral {
+    color: #ffffff; /* Білий */
+  }
+  .stat-lbl-neutral {
+    @apply text-[10px] uppercase font-extrabold tracking-widest mb-1;
+    color: #64748b; /* slate-500 */
+  }
+  .dark .stat-lbl-neutral {
+    color: #94a3b8;
+  }
+
+  /* --- GOALS (Blue) --- */
+  .stat-val-blue {
+    @apply text-3xl font-black tabular-nums tracking-tight transition-colors;
+    color: #2563eb; /* blue-600 (Яскраво синій) - ЧИТАБЕЛЬНИЙ НА БІЛОМУ */
+  }
+  .dark .stat-val-blue {
+    color: #60a5fa; /* blue-400 (Світло-синій) - ЧИТАБЕЛЬНИЙ НА ТЕМНОМУ */
+  }
+  
+  .stat-box-blue-hover {
+    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    /* Light Hover: дуже легкий синій */
+    background-color: rgba(37, 99, 235, 0.05);
+  }
+  .dark .stat-box-blue-hover {
+    /* Dark Hover: синій неон */
+    background-color: rgba(37, 99, 235, 0.15);
+  }
+  
+  .group:hover .stat-box-blue-hover {
+    opacity: 1;
+  }
+
+  /* --- ASSISTS (Emerald) --- */
+  .stat-val-emerald {
+    @apply text-3xl font-black tabular-nums tracking-tight transition-colors;
+    color: #059669; /* emerald-600 (Темно-зелений) */
+  }
+  .dark .stat-val-emerald {
+    color: #34d399; /* emerald-400 (Світло-зелений) */
+  }
+
+  .stat-box-emerald-hover {
+    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    background-color: rgba(5, 150, 105, 0.05);
+  }
+  .dark .stat-box-emerald-hover {
+    background-color: rgba(5, 150, 105, 0.15);
+  }
+  .group:hover .stat-box-emerald-hover {
+    opacity: 1;
+  }
+
+  /* --- LABELS for Stats --- */
+  .stat-lbl {
+    @apply text-[10px] uppercase font-extrabold tracking-widest mb-1 z-10;
+    color: #64748b; /* slate-500 */
+  }
+  .dark .stat-lbl {
+    color: #94a3b8; /* slate-400 */
+  }
+}
+
+@layer utilities {
+  /* ... твої утиліти для бейджів, залишаємо як є, але в стандартному синтаксисі ... */
+  .gumloop-blue-gradient {
+    background-image: linear-gradient(to bottom, hsl(var(--btn-primary-grad-top)), hsl(var(--btn-primary-grad-bot)));
+  }
+  /* Інші утиліти для бейджів можна додати сюди, якщо потрібно */
+}
