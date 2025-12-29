@@ -11,11 +11,12 @@ import {
 } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 
-// === ВИПРАВЛЕННЯ: Імпортуємо єдиний екземпляр клієнта ===
 import { supabase } from "./lib/supabaseClient";
 
-// === твої сторінки ===
-import { AuthProvider } from "@/auth/AuthProvider"; // Перевір шлях!
+// === ІМПОРТУЄМО НОВУ СТОРІНКУ ЗАПРОШЕНЬ ===
+import InvitePage from "./pages/InvitePage"; // <--- ДОДАЛИ ІМПОРТ
+
+import { AuthProvider } from "@/auth/AuthProvider"; 
 import { TeamMembersPage } from "./pages/TeamMembersPage";
 import { Toaster } from "@/components/ui/sonner";
 import { AdminPage } from "./pages/AdminPage";
@@ -77,21 +78,18 @@ function useAuthAndTeam() {
 
   const refreshTeamContext = useMemo(() => {
     return async () => {
-      // якщо нема сесії — контекст порожній
       const s = (await supabase.auth.getSession()).data.session;
       if (!s) {
         setTeam({ teamId: null, role: null });
         return;
       }
 
-      // RPC з твоєї бази
       const [{ data: teamId, error: e1 }, { data: role, error: e2 }] = await Promise.all([
         supabase.rpc("current_team_id"),
         supabase.rpc("current_team_role"),
       ]);
 
       if (e1 || e2) {
-        // eslint-disable-next-line no-console
         console.error("Failed to load team context:", e1 ?? e2);
         setTeam({ teamId: null, role: null });
         return;
@@ -104,15 +102,9 @@ function useAuthAndTeam() {
     };
   }, []);
 
-  // src/App.tsx -> всередині useAuthAndTeam
-
-// src/App.tsx -> всередині useAuthAndTeam
-
   useEffect(() => {
     let mounted = true;
 
-    // 1. Таймер безпеки (скоротили до 1.5с)
-    // Якщо Supabase "затупить", ми просто покажемо інтерфейс.
     const safetyTimer = setTimeout(() => {
       if (mounted && loading) {
         console.warn("⚠️ Auth took too long - releasing UI");
@@ -121,31 +113,24 @@ function useAuthAndTeam() {
     }, 1500);
 
     const init = async () => {
-      // 2. Слухаємо зміни стану (Це працює надійніше при перезагрузці)
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         if (!mounted) return;
         
         setSession(session);
 
         if (session) {
-          // Якщо є юзер - підтягуємо команду у фоні
           refreshTeamContext().finally(() => {
-             // Вимикаємо лоадер, коли підтягнули команду
              if (mounted) setLoading(false);
           });
         } else {
-          // Якщо юзера немає - відразу вимикаємо лоадер
           setTeam({ teamId: null, role: null });
           if (mounted) setLoading(false);
         }
       });
 
-      // 3. Додаткова перевірка (getSession), але ми на неї не блокуємось жорстко
-      // Це потрібно для першого рендеру, якщо onAuthStateChange не стрельне миттєво
       try {
         const { data } = await supabase.auth.getSession();
         if (mounted && data.session) {
-           // Якщо сесія вже є, записуємо її, щоб не чекати події
            setSession(data.session);
            await refreshTeamContext();
            if (mounted) setLoading(false);
@@ -238,6 +223,8 @@ function RoleGate({
 // =======================
 // Login page
 // =======================
+// src/App.tsx (Заміни тільки функцію LoginPage)
+
 function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -285,11 +272,9 @@ function LoginPage() {
         return;
       }
 
-      // magic link
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          // IMPORTANT: в Supabase Auth settings має бути дозволений redirect
           emailRedirectTo: `${window.location.origin}/overview`,
           shouldCreateUser: true,
         },
@@ -307,10 +292,10 @@ function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[linear-gradient(135deg,_#f7f9fc_0%,_#eef1f6_50%,_#f7f9fc_100%)] p-6">
-      <div className="w-full max-w-md rounded-[28px] border bg-white shadow-sm p-6">
+    <div className="min-h-screen w-full flex items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md rounded-[28px] border border-border bg-card shadow-surface p-6 text-card-foreground">
         <div className="mb-5">
-          <div className="text-xl font-extrabold">Вхід у FAYNA TEAM</div>
+          <div className="text-xl font-extrabold text-foreground">Вхід у FAYNA TEAM</div>
           <div className="text-sm text-muted-foreground mt-1">
             Увійди, щоб бачити матчі, тренування й фінанси (як дозволяє роль).
           </div>
@@ -319,21 +304,25 @@ function LoginPage() {
         {(error || msg) && (
           <div
             className={cx(
-              "mb-4 rounded-xl border p-3 text-sm",
-              error ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              "mb-4 rounded-xl border p-3 text-sm font-medium",
+              error 
+                ? "bg-danger-soft border-danger-soft-border text-danger-foreground" 
+                : "bg-success-soft border-success-soft-border text-success-foreground"
             )}
           >
-            <div className="font-semibold">{error ? "Помилка" : "Ок"}</div>
-            <div className="mt-0.5">{error ?? msg}</div>
+            <div className="font-bold">{error ? "Помилка" : "Ок"}</div>
+            <div className="mt-0.5 opacity-90">{error ?? msg}</div>
           </div>
         )}
 
-        <div className="mb-4 inline-flex rounded-xl bg-muted p-1">
+        <div className="mb-4 inline-flex rounded-xl bg-muted p-1 border border-border/50">
           <button
             type="button"
             className={cx(
-              "px-3 py-1.5 rounded-lg text-sm transition",
-              mode === "magic" ? "bg-white shadow-sm" : "text-muted-foreground"
+              "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
+              mode === "magic" 
+                ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10" 
+                : "text-muted-foreground hover:text-foreground"
             )}
             onClick={() => setMode("magic")}
           >
@@ -342,8 +331,10 @@ function LoginPage() {
           <button
             type="button"
             className={cx(
-              "px-3 py-1.5 rounded-lg text-sm transition",
-              mode === "password" ? "bg-white shadow-sm" : "text-muted-foreground"
+              "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
+              mode === "password" 
+                ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10" 
+                : "text-muted-foreground hover:text-foreground"
             )}
             onClick={() => setMode("password")}
           >
@@ -351,11 +342,11 @@ function LoginPage() {
           </button>
         </div>
 
-        <form onSubmit={onLogin} className="space-y-3">
+        <form onSubmit={onLogin} className="space-y-4">
           <div>
-            <label className="text-sm font-medium">Email</label>
+            <label className="text-sm font-medium text-foreground">Email</label>
             <input
-              className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
+              className="mt-1.5 w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@gmail.com"
@@ -365,9 +356,9 @@ function LoginPage() {
 
           {mode === "password" && (
             <div>
-              <label className="text-sm font-medium">Пароль</label>
+              <label className="text-sm font-medium text-foreground">Пароль</label>
               <input
-                className="mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                className="mt-1.5 w-full rounded-[var(--radius-lg)] border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition-all placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -380,188 +371,21 @@ function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+            className="w-full rounded-[var(--btn-radius)] bg-primary py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? "..." : "Увійти"}
           </button>
         </form>
 
-        <div className="mt-4 text-xs text-muted-foreground">
-          Для інвайтів: <Link className="underline" to="/invite">перейти до /invite</Link>
+        <div className="mt-6 text-center text-xs text-muted-foreground">
+          Для інвайтів: <Link className="underline hover:text-primary transition-colors" to="/invite">перейти до /invite</Link>
         </div>
       </div>
     </div>
   );
 }
 
-// =======================
-// Invite (MVP link)
-// =======================
-function InvitePage({ teamId, role }: { teamId: string | null; role: TeamRole }) {
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  const params = new URLSearchParams(location.search);
-
-  const initialTeamId = params.get("team_id") || teamId || "";
-  const initialRole = (params.get("role") as TeamRole) || "viewer";
-
-  const [inviteTeamId, setInviteTeamId] = useState(initialTeamId);
-  const [inviteRole, setInviteRole] = useState<Exclude<TeamRole, null>>(
-    (initialRole as Exclude<TeamRole, null>) || "viewer"
-  );
-
-  const [status, setStatus] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  const link = useMemo(() => {
-    const u = new URL(window.location.origin);
-    u.pathname = "/invite";
-    u.searchParams.set("team_id", inviteTeamId || "");
-    u.searchParams.set("role", inviteRole);
-    return u.toString();
-  }, [inviteTeamId, inviteRole]);
-
-  async function copy() {
-    setErr(null);
-    setStatus(null);
-    try {
-      await navigator.clipboard.writeText(link);
-      setStatus("Скопійовано. Скинь цей лінк людині — вона залогіниться й натисне “Приєднатися”.");
-    } catch {
-      setErr("Не вдалося скопіювати. Скопіюй вручну.");
-    }
-  }
-
-  async function join() {
-    setErr(null);
-    setStatus(null);
-
-    const team_id = params.get("team_id");
-    const joinRole = (params.get("role") as Exclude<TeamRole, null>) || "viewer";
-
-    if (!team_id) {
-      setErr("Немає team_id в URL. Відкрий інвайт-лінк із team_id.");
-      return;
-    }
-
-    const { data } = await supabase.auth.getSession();
-    const s = data.session;
-
-    if (!s?.user?.id) {
-      navigate(`/login?next=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
-      return;
-    }
-
-    // MVP: прямий upsert у team_members
-    // IMPORTANT: RLS має дозволяти insert/upsert (або тимчасово вимкнено).
-    const { error } = await supabase
-      .from("team_members")
-      .upsert(
-        { team_id, user_id: s.user.id, role: joinRole },
-        { onConflict: "team_id,user_id" }
-      );
-
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-
-    setStatus("Готово! Ти в команді. Перекидаю на overview…");
-    setTimeout(() => navigate("/overview", { replace: true }), 600);
-  }
-
-  const canInvite = role === "super_admin" || role === "manager";
-
-  return (
-    <div className="p-6">
-      <div className="mx-auto max-w-2xl rounded-2xl border bg-card p-5">
-        <div className="text-lg font-extrabold">Інвайт у команду (MVP)</div>
-        <div className="text-sm text-muted-foreground mt-1">
-          Генерує лінк із <code className="px-1 py-0.5 rounded bg-muted">team_id</code> та <code className="px-1 py-0.5 rounded bg-muted">role</code>.
-        </div>
-
-        {(err || status) && (
-          <div
-            className={cx(
-              "mt-4 rounded-xl border p-3 text-sm",
-              err ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
-            )}
-          >
-            <div className="font-semibold">{err ? "Помилка" : "Ок"}</div>
-            <div className="mt-0.5">{err ?? status}</div>
-          </div>
-        )}
-
-        <div className="mt-5 grid gap-3">
-          <div className="grid gap-1">
-            <label className="text-sm font-medium">Team ID</label>
-            <input
-              className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
-              value={inviteTeamId}
-              onChange={(e) => setInviteTeamId(e.target.value)}
-              placeholder="uuid…"
-              disabled={!canInvite}
-            />
-          </div>
-
-          <div className="grid gap-1">
-            <label className="text-sm font-medium">Роль</label>
-            <select
-              className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as Exclude<TeamRole, null>)}
-              disabled={!canInvite}
-            >
-              <option value="viewer">viewer</option>
-              <option value="manager">manager</option>
-              <option value="super_admin">super_admin</option>
-            </select>
-          </div>
-
-          <div className="grid gap-1">
-            <label className="text-sm font-medium">Лінк</label>
-            <div className="flex gap-2">
-              <input
-                className="flex-1 rounded-xl border px-3 py-2 text-sm outline-none"
-                value={link}
-                readOnly
-              />
-              <button
-                className="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-muted"
-                onClick={copy}
-                disabled={!canInvite}
-                type="button"
-              >
-                Copy
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap gap-2 justify-between mt-2">
-            <div className="text-xs text-muted-foreground">
-              Твоя роль зараз: <code className="px-1 py-0.5 rounded bg-muted">{String(role)}</code>
-            </div>
-
-            <button
-              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
-              onClick={join}
-              type="button"
-            >
-              Приєднатися по інвайту
-            </button>
-          </div>
-
-          {!canInvite && (
-            <div className="text-xs text-muted-foreground">
-              Генерувати інвайти можуть тільки <b>super_admin</b> або <b>manager</b>.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+// --- ТУТ БУЛА СТАРА ФУНКЦІЯ InvitePage (MVP). Я ЇЇ ВИДАЛИВ. ---
 
 // =======================
 // App routes
@@ -574,17 +398,8 @@ function AppRoutes() {
       {/* public */}
       <Route path="/login" element={<LoginPage />} />
 
-      {/* protected invite (щоб бачити team_id/роль в інтерфейсі), але join працює і з /invite?team_id=... */}
-      <Route
-        path="/invite"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <InvitePage teamId={team.teamId} role={team.role} />
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
+      {/* --- ВИПРАВЛЕНО: Інвайт тепер "публічний" (має свій лейаут всередині) --- */}
+      <Route path="/invite" element={<InvitePage />} />
 
       {/* Overview */}
       <Route
@@ -707,18 +522,17 @@ function AppRoutes() {
       />
 
       <Route
-  path="/settings/members"
-  element={
-    <RequireAuth session={session} loading={loading}>
-      <AppLayout>
-        {/* Тільки адміни можуть заходити сюди */}
-        <RoleGate allow={["super_admin"]} role={team.role}>
-          <TeamMembersPage />
-        </RoleGate>
-      </AppLayout>
-    </RequireAuth>
-  }
-/>
+        path="/settings/members"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <RoleGate allow={["super_admin"]} role={team.role}>
+                <TeamMembersPage />
+              </RoleGate>
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
       <Route
         path="/player/:playerId"
         element={
@@ -808,16 +622,16 @@ function AppRoutes() {
         }
       />
 
-        <Route
-  path="/profile"
-  element={
-    <RequireAuth session={session} loading={loading}>
-      <AppLayout>
-        <ProfilePage />
-      </AppLayout>
-    </RequireAuth>
-  }
-/>
+      <Route
+        path="/profile"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <ProfilePage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
 
       {/* Legacy admin page (якщо треба) */}
       <Route
@@ -842,7 +656,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppRoutes />
-      <Toaster position="top-center" /> {/* <-- Додали тут */}
+      <Toaster position="top-center" />
     </BrowserRouter>
   );
 }
