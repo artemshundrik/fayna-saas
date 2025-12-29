@@ -585,7 +585,7 @@ export function PlayersAdminPage() {
                     </Button>
                     {/* Виправлено variant="primary" -> variant="default" */}
                     <Button 
-                        variant="default" 
+                        variant="primary" 
                         type="submit" 
                         disabled={saving} 
                         className="min-w-[120px]"
