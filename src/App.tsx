@@ -31,9 +31,7 @@ import { TrainingsListPage } from "./pages/AdminTrainings/TrainingsListPage";
 import { TrainingCreatePage } from "./pages/AdminTrainings/TrainingCreatePage";
 import { TrainingDetailPage } from "./pages/AdminTrainings/TrainingDetailPage";
 import { TrainingsAnalyticsPage } from "./pages/AdminTrainings/TrainingsAnalyticsPage";
-import { DesignSystemPage } from "./pages/DesignSystemPage";
 import { MatchesShadcnPage } from "@/pages/MatchesShadcnPage";
-import PlaygroundPage from "./pages/PlaygroundPage";
 import { AppLayout } from "@/layout/AppLayout";
 import { CreateMatchPage } from "./pages/CreateMatchPage";
 import { OverviewPage } from "./pages/OverviewPage";
@@ -595,28 +593,6 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <FinancePage />
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-
-      {/* Dev pages */}
-      <Route
-        path="/design-system"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <DesignSystemPage />
-            </AppLayout>
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/playground"
-        element={
-          <RequireAuth session={session} loading={loading}>
-            <AppLayout>
-              <PlaygroundPage />
             </AppLayout>
           </RequireAuth>
         }

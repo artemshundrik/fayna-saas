@@ -678,6 +678,7 @@ export function MatchDetailsPage() {
 }, [players]);
 
   const [attendance, setAttendance] = React.useState<AttendanceRow[]>([]);
+  const [attendanceLoaded, setAttendanceLoaded] = React.useState(false);
 
   const [attendanceSavingId, setAttendanceSavingId] = React.useState<string | null>(null);
   const [attendanceError, setAttendanceError] = React.useState<string | null>(null);
@@ -738,6 +739,7 @@ export function MatchDetailsPage() {
 
       setLoading(true);
       setError(null);
+      setAttendanceLoaded(false);
 
       const { data: matchData, error: matchError } = await supabase
         .from("matches")
@@ -873,6 +875,7 @@ if (ttErr) {
 
       setEvents(eventsErr ? [] : ((eventsData || []) as MatchEvent[]).slice().sort(sortEventsStable));
       setAttendance(attErr ? [] : ((attendanceData || []) as AttendanceRow[]));
+      setAttendanceLoaded(!attErr);
 
       let rosterSet: Set<string> | null = null;
       if (typedMatch.tournament_id) {
@@ -1072,13 +1075,15 @@ if (ttErr) {
 
   React.useEffect(() => {
     if (!match?.tournament_id || !match?.id) return;
+    if (match.status !== "scheduled") return;
+    if (!attendanceLoaded) return;
     if (rosterSyncing || attendanceIds.size > 0) return;
 
     if (rosterAutoAppliedRef.current === match.id) return;
     rosterAutoAppliedRef.current = match.id;
 
     applyTournamentRoster();
-  }, [applyTournamentRoster, attendanceIds.size, match?.id, match?.tournament_id, rosterSyncing]);
+  }, [applyTournamentRoster, attendanceIds.size, match?.id, match?.tournament_id, rosterSyncing, attendanceLoaded]);
 
   const scoreboard = React.useMemo(() => {
     if (!match) {

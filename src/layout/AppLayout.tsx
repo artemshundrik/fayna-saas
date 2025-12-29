@@ -10,10 +10,8 @@ import {
   Layers,
   Bell,
   ChevronRight,
-  Palette,
   MoreVertical,
   Search,
-  Blocks,
   ChevronDown,
   Menu,
   Settings,
@@ -34,7 +32,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/app/UserMenu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -60,7 +58,7 @@ type AppLayoutProps = {
   children: ReactNode;
 };
 
-type SidebarGroupKey = "team" | "analytics" | "management" | "dev";
+type SidebarGroupKey = "team" | "analytics" | "management";
 
 type SidebarLink = {
   label: string;
@@ -99,10 +97,6 @@ analyticsTeam: "/analytics/team",
 
   attendance: "/admin/trainings/analytics", // реюз існуючої сторінки
 
-  // dev-only
-  designSystem: "/design-system",
-  playground: "/playground",
-
   workspaceSettings: "/workspace-settings",
   accountSettings: "/account-settings",
   profile: "/profile",
@@ -128,22 +122,7 @@ const baseSidebarLinks: SidebarLink[] = [
   
 ];
 
-// dev links (тільки в dev-режимі)
-const devSidebarLinks: SidebarLink[] = [
-  { label: "Design System", to: ROUTES.designSystem, group: "dev", icon: Palette },
-  { label: "Playground", to: ROUTES.playground, group: "dev", icon: Blocks },
-];
-
-const isDev = (() => {
-  try {
-    // Vite
-    return typeof import.meta !== "undefined" && (import.meta as any).env?.DEV;
-  } catch {
-    return false;
-  }
-})();
-
-const sidebarLinks: SidebarLink[] = isDev ? [...baseSidebarLinks, ...devSidebarLinks] : baseSidebarLinks;
+const sidebarLinks: SidebarLink[] = baseSidebarLinks;
 
 // --- Header Logic ---
 const getHeaderConfig = (pathname: string): HeaderConfig => {
@@ -153,22 +132,6 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       subtitle: "Пульс команди, найближчі події та швидкі дії.",
       breadcrumbLabel: "Огляд",
       breadcrumbTo: ROUTES.overview,
-    };
-
-  if (pathname === ROUTES.designSystem)
-    return {
-      title: "Дизайн-система",
-      subtitle: "UI компоненти, токени та гайдлайни.",
-      breadcrumbLabel: "Design System",
-      breadcrumbTo: ROUTES.designSystem,
-    };
-
-  if (pathname === ROUTES.playground)
-    return {
-      title: "UI Playground",
-      subtitle: "Тестування компонентів у реальних сценаріях.",
-      breadcrumbLabel: "Playground",
-      breadcrumbTo: ROUTES.playground,
     };
 
   if (pathname === ROUTES.analyticsTeam)
@@ -320,6 +283,41 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const [matchMeta, setMatchMeta] = useState<MatchMeta | null>(null);
 
+  // Стан для динамічного логотипу команди
+  const [workspaceLogo, setWorkspaceLogo] = useState<string | null>(null);
+
+useEffect(() => {
+  async function fetchLogo() {
+    try {
+      // 1. Отримуємо ID команди (з таблиці team_members)
+      const { data: teamId } = await supabase.rpc('current_team_id');
+      if (!teamId) return;
+
+      // 2. Отримуємо логотип через зв'язок: Team -> Club
+      const { data, error } = await supabase
+        .from('teams')
+        .select(`
+          club:clubs (
+            logo_url
+          )
+        `)
+        .eq('id', teamId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      // Дістаємо вкладений logo_url
+      const logoUrl = (data as any)?.club?.logo_url;
+      if (logoUrl) {
+        setWorkspaceLogo(logoUrl);
+      }
+    } catch (err) {
+      console.error("Помилка завантаження лого через зв'язок:", err);
+    }
+  }
+  fetchLogo();
+}, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -398,32 +396,45 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/20 selection:text-primary">
       {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex fixed inset-y-0 z-30 w-[270px] flex-col border-r border-border bg-card/60 backdrop-blur-xl">
-        {/* Workspace / Brand */}
         <div className="px-4 pt-5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 className={cn(
-                  "w-full rounded-xl px-2.5 py-2.5 text-left transition-colors",
-                  "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                  "w-full rounded-xl px-2.5 py-2.5 text-left transition-all duration-200",
+                  "hover:bg-muted/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 group"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-                    <LayoutGrid className="h-4 w-4" />
+                  
+                  {/* --- ЛОГОТИП КОМАНДИ --- */}
+                  <div className="relative">
+                    <Avatar className="h-9 w-9 rounded-xl border border-border/50 shadow-lg shadow-primary/20 transition-transform group-hover:scale-105">
+  {workspaceLogo ? (
+    <AvatarImage 
+      src={workspaceLogo} 
+      alt="Fayna Team Logo" 
+      className="object-cover" 
+    />
+  ) : null}
+  <AvatarFallback className="rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-xs tracking-wider">
+    FT
+  </AvatarFallback>
+</Avatar>
+                    
+                    {/* Зелена крапка онлайн статусу */}
+                    <span className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500 border-2 border-background"></span>
+                    </span>
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[13px] font-semibold tracking-tight">FAYNA TEAM</span>
-                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      <span className="truncate text-[13px] font-semibold tracking-tight text-foreground uppercase">Fayna Team</span>
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/70 transition-transform group-data-[state=open]:rotate-180" />
                     </div>
-                    <div className="mt-0.5 text-[11px] font-medium text-muted-foreground">Workspace</div>
-                  </div>
-
-                  <div className="ml-auto hidden lg:flex items-center gap-1 rounded-md bg-muted/50 px-2 py-1 text-[10px] text-muted-foreground">
-                    <Sparkles className="h-3 w-3" />
-                    Pro
+                    <div className="truncate text-[11px] font-medium text-muted-foreground/80">Workspace</div>
                   </div>
                 </div>
               </button>
@@ -488,13 +499,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             links={sidebarLinks.filter((l) => l.group === "management")}
             currentPath={location.pathname}
           />
-          {isDev && (
-            <SidebarGroup
-              label="Dev"
-              links={sidebarLinks.filter((l) => l.group === "dev")}
-              currentPath={location.pathname}
-            />
-          )}
         </nav>
 
         {/* Footer / Profile */}
@@ -688,7 +692,7 @@ function SidebarGroup({
   );
 }
 
-function MobileNav({ currentPath, isDev }: { currentPath: string; isDev: boolean }) {
+function MobileNav({ currentPath }: { currentPath: string }) {
   return (
     <div className="space-y-5">
       <SidebarGroup label="Команда" links={sidebarLinks.filter((l) => l.group === "team")} currentPath={currentPath} />
@@ -702,10 +706,6 @@ function MobileNav({ currentPath, isDev }: { currentPath: string; isDev: boolean
         links={sidebarLinks.filter((l) => l.group === "management")}
         currentPath={currentPath}
       />
-      {isDev && (
-        <SidebarGroup label="Dev" links={sidebarLinks.filter((l) => l.group === "dev")} currentPath={currentPath} />
-      )}
-
       <div className="pt-2 border-t border-border">
         <div className="flex items-center gap-3 rounded-xl p-3 bg-muted/40">
           <Avatar className="h-9 w-9 rounded-xl border border-border">
