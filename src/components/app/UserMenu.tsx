@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, MoreVertical, SlidersHorizontal, User } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +27,8 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
   const [userData, setUserData] = useState({
     name: "Завантаження...",
     role: "...",
-    initials: ".."
+    initials: "..",
+    avatarUrl: null as string | null
   });
 
   useEffect(() => {
@@ -56,8 +57,9 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
 
         setUserData({
           name: fullName,
-          role: displayRole, 
-          initials: initials
+          role: displayRole,
+          initials: initials,
+          avatarUrl: (user.user_metadata?.avatar_url as string | undefined) || null
         });
       }
     }
@@ -74,6 +76,9 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
     return (
       <div className="flex items-center gap-3 rounded-xl p-3 bg-muted/40">
         <Avatar className="h-9 w-9 rounded-xl border border-border">
+          {userData.avatarUrl ? (
+            <AvatarImage src={userData.avatarUrl} className="object-cover" />
+          ) : null}
           <AvatarFallback className="rounded-xl bg-muted text-xs font-semibold text-muted-foreground">
             {userData.initials}
           </AvatarFallback>
@@ -105,6 +110,9 @@ export function UserMenu({ mobile = false }: { mobile?: boolean }) {
         >
           <div className="flex items-center gap-3">
             <Avatar className="h-9 w-9 rounded-xl border border-border">
+              {userData.avatarUrl ? (
+                <AvatarImage src={userData.avatarUrl} className="object-cover" />
+              ) : null}
               <AvatarFallback className="rounded-xl bg-muted text-xs font-semibold text-muted-foreground">
                 {userData.initials}
               </AvatarFallback>

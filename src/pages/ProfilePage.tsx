@@ -1,16 +1,27 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { User, Mail, Shield, Save, Loader2, Camera, Lock, Globe } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import Cropper, { type Area } from "react-easy-crop";
+
+const AVATAR_BUCKET = (import.meta.env.VITE_SUPABASE_AVATAR_BUCKET as string | undefined) || "avatars";
 
 export function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarDraftUrl, setAvatarDraftUrl] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // Form state
   const [fullName, setFullName] = useState("");
@@ -28,9 +39,11 @@ export function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
+        setUserId(user.id);
         setEmail(user.email || "");
         const metaName = user.user_metadata?.full_name || "";
         setFullName(metaName);
+        setAvatarUrl((user.user_metadata?.avatar_url as string | undefined) || null);
 
         const i = (metaName || user.email || "U")
           .split(" ")
@@ -49,11 +62,123 @@ export function ProfilePage() {
     }
   };
 
+  const handlePickAvatar = () => {
+    if (avatarUploading) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !userId) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Потрібне зображення", {
+        description: "Оберіть файл зображення (JPG, PNG, WebP тощо).",
+      });
+      return;
+    }
+
+    const maxBytes = 5 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      toast.error("Занадто великий файл", {
+        description: "Максимальний розмір — 5 MB.",
+      });
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarDraftUrl(previewUrl);
+    setZoom(1);
+    setCrop({ x: 0, y: 0 });
+  };
+
+  const handleCropComplete = (_area: Area, areaPixels: Area) => {
+    setCroppedAreaPixels(areaPixels);
+  };
+
+  const getCroppedBlob = async (imageSrc: string, cropArea: Area): Promise<Blob | null> => {
+    const image = new Image();
+    image.src = imageSrc;
+    await new Promise((resolve, reject) => {
+      image.onload = resolve;
+      image.onerror = reject;
+    });
+
+    const canvas = document.createElement("canvas");
+    const size = 512;
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    const scaleX = image.naturalWidth / image.width;
+    const scaleY = image.naturalHeight / image.height;
+
+    ctx.drawImage(
+      image,
+      cropArea.x * scaleX,
+      cropArea.y * scaleY,
+      cropArea.width * scaleX,
+      cropArea.height * scaleY,
+      0,
+      0,
+      size,
+      size
+    );
+
+    return new Promise((resolve) => canvas.toBlob((b) => resolve(b), "image/png", 0.92));
+  };
+
+  const uploadAvatarBlob = async (blob: Blob) => {
+    if (!userId) return;
+    setAvatarUploading(true);
+    try {
+      const path = `avatars/${userId}/avatar-${Date.now()}.png`;
+      const { error: uploadError } = await supabase.storage
+        .from(AVATAR_BUCKET)
+        .upload(path, blob, { upsert: true, contentType: "image/png" });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+      const publicUrl = data.publicUrl;
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { avatar_url: publicUrl },
+      });
+
+      if (updateError) throw updateError;
+
+      setAvatarUrl(publicUrl);
+      setAvatarDraftUrl(null);
+      toast.success("Аватар оновлено");
+    } catch (error: any) {
+      toast.error("Не вдалося оновити аватар", {
+        description: error.message,
+      });
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const handleCropSave = async () => {
+    if (!avatarDraftUrl || !croppedAreaPixels) return;
+    const blob = await getCroppedBlob(avatarDraftUrl, croppedAreaPixels);
+    if (!blob) return;
+    await uploadAvatarBlob(blob);
+  };
+
+  const handleCropCancel = () => {
+    if (avatarDraftUrl) URL.revokeObjectURL(avatarDraftUrl);
+    setAvatarDraftUrl(null);
+  };
+
   const updateProfile = async () => {
     try {
       setUpdating(true);
       const { error } = await supabase.auth.updateUser({
-        data: { full_name: fullName }
+        data: { full_name: fullName, avatar_url: avatarUrl }
       });
 
       if (error) throw error;
@@ -108,15 +233,31 @@ export function ProfilePage() {
               {/* Avatar Wrapper */}
               <div className="relative group mx-auto sm:mx-0">
                 <Avatar className="h-28 w-28 border-[4px] border-card shadow-lg bg-card text-foreground">
-                  <AvatarFallback className="text-3xl font-bold bg-muted text-foreground">
-                    {initials}
-                  </AvatarFallback>
+                  {avatarUrl ? <AvatarImage src={avatarUrl} className="object-cover" /> : null}
+                  <AvatarFallback className="text-3xl font-bold bg-muted text-foreground">{initials}</AvatarFallback>
                 </Avatar>
                 
                 {/* Edit Photo Button */}
-                <button className="absolute bottom-1 right-1 p-2 rounded-full border-[3px] border-card bg-foreground text-background hover:bg-foreground/80 transition-colors shadow-sm">
-                  <Camera className="w-3.5 h-3.5" />
+                <button
+                  type="button"
+                  onClick={handlePickAvatar}
+                  className="absolute bottom-1 right-1 p-2 rounded-full border-[3px] border-card bg-foreground text-background hover:bg-foreground/80 transition-colors shadow-sm"
+                  aria-label="Змінити фото профілю"
+                  disabled={avatarUploading}
+                >
+                  {avatarUploading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Camera className="w-3.5 h-3.5" />
+                  )}
                 </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
               </div>
               
               <div className="mb-3 space-y-1.5 text-center sm:text-left">
@@ -138,6 +279,58 @@ export function ProfilePage() {
               Зберегти зміни
             </Button>
           </div>
+
+          {avatarDraftUrl ? (
+            <div className="mb-8 rounded-2xl border border-border bg-muted/20 p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="relative h-36 w-36 overflow-hidden rounded-full border border-border bg-background">
+                  <Cropper
+                    image={avatarDraftUrl}
+                    crop={crop}
+                    zoom={zoom}
+                    aspect={1}
+                    cropShape="round"
+                    showGrid={false}
+                    onCropChange={setCrop}
+                    onZoomChange={setZoom}
+                    onCropComplete={handleCropComplete}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-3 md:flex-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Zoom</label>
+                  <input
+                    type="range"
+                    min={1}
+                    max={3}
+                    step={0.01}
+                    value={zoom}
+                    onChange={(e) => setZoom(Number(e.target.value))}
+                    className="w-full"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 rounded-xl"
+                      onClick={handleCropCancel}
+                      disabled={avatarUploading}
+                    >
+                      Скасувати
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-9 rounded-xl"
+                      onClick={handleCropSave}
+                      disabled={avatarUploading || !croppedAreaPixels}
+                    >
+                      {avatarUploading ? "Завантажую..." : "Застосувати"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <Separator className="my-8" />
 
