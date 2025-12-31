@@ -100,30 +100,37 @@ const globalToAttendanceMap: Record<string, AttendanceStatus> = {
   away: "absent",
 };
 
-const statusStyles: Record<AttendanceStatus, { label: string; short: string; tone: string; icon: any }> = {
+const statusStyles: Record<
+  AttendanceStatus,
+  { label: string; short: string; tone: string; icon: any; bar: string }
+> = {
   present: {
     label: "Присутні",
     short: "Присутній",
     tone: "bg-success-soft text-success-foreground border-success-soft-border",
-    icon: CheckCircle2
+    icon: CheckCircle2,
+    bar: "bg-success-foreground/70"
   },
   absent: {
     label: "Відсутні",
     short: "Відсутній",
     tone: "bg-neutral-soft text-neutral-foreground border-neutral-soft-border",
-    icon: UserX
+    icon: UserX,
+    bar: "bg-neutral-foreground/50"
   },
   injured: {
     label: "Травма",
     short: "Травма",
     tone: "bg-danger-soft text-danger-foreground border-danger-soft-border",
-    icon: Stethoscope
+    icon: Stethoscope,
+    bar: "bg-danger-foreground/70"
   },
   sick: {
     label: "Хворі",
     short: "Хворий",
     tone: "bg-info-soft text-info-foreground border-info-soft-border",
-    icon: Activity
+    icon: Activity,
+    bar: "bg-info-foreground/70"
   },
 };
 
