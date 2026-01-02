@@ -102,7 +102,7 @@ const ROLE_SELECT_OPTIONS = {
 };
 
 export function TeamMembersPage() {
-  const { teamId, role: myRole } = useAuth();
+  const { teamId, role: myRole, userId } = useAuth();
   
   // TABS STATE
   const [activeTab, setActiveTab] = useState<"members" | "invites">("members");
@@ -122,6 +122,10 @@ export function TeamMembersPage() {
   // REVOKE CONFIRMATION STATE
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [revokeBusy, setRevokeBusy] = useState(false);
+
+  // REMOVE MEMBER CONFIRMATION STATE
+  const [removeId, setRemoveId] = useState<string | null>(null);
+  const [removeBusy, setRemoveBusy] = useState(false);
 
   const canManage = myRole === "super_admin";
   const currentRoleData = ROLE_SELECT_OPTIONS[inviteRole as keyof typeof ROLE_SELECT_OPTIONS];
@@ -182,14 +186,37 @@ export function TeamMembersPage() {
     }
   }
 
-  async function removeMember(userId: string) {
-    if (!confirm("Видалити цього користувача з команди?")) return;
-    const { error } = await supabase.from("team_members").delete().eq("user_id", userId).eq("team_id", teamId);
-    if (error) toast.error("Помилка видалення");
-    else {
-      toast.success("Користувача видалено");
-      fetchMembers();
+  function confirmRemove(userId: string) {
+    setRemoveId(userId);
+  }
+
+  async function handleRemoveMember() {
+    if (!removeId) return;
+    if (!teamId) {
+      toast.error("Не визначено команду");
+      return;
     }
+    if (removeId === userId) {
+      toast.error("Не можна видалити себе з команди");
+      return;
+    }
+
+    setRemoveBusy(true);
+    const { error } = await supabase
+      .from("team_members")
+      .delete()
+      .eq("user_id", removeId)
+      .eq("team_id", teamId);
+    setRemoveBusy(false);
+
+    if (error) {
+      toast.error("Помилка видалення", { description: error.message });
+      return;
+    }
+
+    toast.success("Користувача видалено");
+    setMembers((prev) => prev.filter((m) => m.user_id !== removeId));
+    setRemoveId(null);
   }
 
   function confirmRevoke(id: string) {
@@ -391,7 +418,7 @@ export function TeamMembersPage() {
                                 <DropdownMenuItem onClick={() => updateRole(m.user_id, "manager")}>Manager</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => updateRole(m.user_id, "super_admin")}>Super Admin</DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-red-600" onClick={() => removeMember(m.user_id)}>
+                                <DropdownMenuItem className="text-red-600" onClick={() => confirmRemove(m.user_id)}>
                                   <Trash2 className="w-4 h-4 mr-2" /> Видалити
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -609,6 +636,43 @@ export function TeamMembersPage() {
                  Так, видалити
               </Button>
            </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- REMOVE MEMBER CONFIRMATION DIALOG --- */}
+      <Dialog open={!!removeId} onOpenChange={(open) => !open && setRemoveId(null)}>
+        <DialogContent className="sm:max-w-[420px] p-0 gap-0 border border-border bg-card text-foreground overflow-hidden rounded-[24px]">
+          <div className="p-6 flex flex-col items-center text-center">
+            <div className="w-14 h-14 bg-danger-soft rounded-full flex items-center justify-center mb-4 text-destructive border border-danger-soft-border">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-foreground text-center">Видалити учасника?</DialogTitle>
+              <DialogDescription className="text-muted-foreground text-center mt-2">
+                Користувача буде виключено з команди. Цю дію не можна скасувати.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="p-6 pt-0 flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1 h-11 rounded-[var(--btn-radius)] border-input hover:bg-accent hover:text-accent-foreground"
+              onClick={() => setRemoveId(null)}
+              disabled={removeBusy}
+            >
+              Скасувати
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1 h-11 rounded-[var(--btn-radius)] bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-md shadow-destructive/20"
+              onClick={handleRemoveMember}
+              disabled={removeBusy}
+            >
+              {removeBusy ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Так, видалити
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

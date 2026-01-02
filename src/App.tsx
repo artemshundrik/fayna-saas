@@ -39,6 +39,7 @@ import { TournamentDetailsPage } from "./pages/TournamentDetailsPage";
 import { FinancePage } from "./pages/FinancePage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import UpdatePasswordPage from "./pages/UpdatePasswordPage";
+import NotificationsPage from "./pages/NotificationsPage";
 
 // =======================
 // Types
@@ -389,6 +390,16 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/update-password" element={<UpdatePasswordPage />} />
+      <Route
+        path="/notifications"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <NotificationsPage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
 
       {/* --- ВИПРАВЛЕНО: Інвайт тепер "публічний" (має свій лейаут всередині) --- */}
       <Route path="/invite" element={<InvitePage />} />

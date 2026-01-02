@@ -38,6 +38,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 import { supabase } from "@/lib/supabaseClient";
+import { useAuth } from "@/auth/AuthProvider";
+import { mapNotificationRow, type NotificationItem, type NotificationRow } from "@/lib/notifications";
 
 import { CommandPalette } from "@/components/app/CommandPalette";
 
@@ -50,6 +52,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { toast } from "sonner";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
@@ -97,6 +100,7 @@ const ROUTES = {
 
   workspaceSettings: "/workspace-settings",
   membersAccess: "/settings/members",
+  notifications: "/notifications",
   accountSettings: "/account-settings",
   profile: "/profile",
 } as const;
@@ -204,6 +208,13 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Фінанси",
       breadcrumbTo: ROUTES.finance,
     };
+  if (pathname.startsWith(ROUTES.notifications))
+    return {
+      title: "Сповіщення",
+      subtitle: "Всі події та оновлення в одному місці.",
+      breadcrumbLabel: "Сповіщення",
+      breadcrumbTo: ROUTES.notifications,
+    };
   if (pathname.startsWith(ROUTES.membersAccess))
     return {
       title: "Доступ / Ролі",
@@ -278,6 +289,7 @@ function formatDateTimeUA(iso: string) {
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { userId } = useAuth();
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
 
   // /matches/:matchId/events
@@ -395,6 +407,8 @@ useEffect(() => {
 
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   useEffect(() => {
     applyTheme(theme);
@@ -402,6 +416,75 @@ useEffect(() => {
 
   const toggleTheme = () => {
     setTheme((t) => (t === "dark" ? "light" : "dark"));
+  };
+
+  const loadNotifications = React.useCallback(async () => {
+    if (!userId) return;
+    setNotificationsLoading(true);
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("id, title, body, href, created_at, read_at, type")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (!error) {
+      setNotifications(((data || []) as NotificationRow[]).map(mapNotificationRow));
+    }
+    setNotificationsLoading(false);
+  }, [userId]);
+
+  useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel(`notifications:${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = payload.new as NotificationRow;
+          const item = mapNotificationRow(row);
+          setNotifications((prev) => [item, ...prev].slice(0, 20));
+          toast(item.title, { description: item.description || undefined });
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = async () => {
+    if (!userId || unreadCount === 0) return;
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .is("read_at", null);
+    if (!error) {
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      toast.success("Усі сповіщення прочитані");
+    } else {
+      toast.error("Не вдалося оновити сповіщення");
+    }
+  };
+
+  const openNotification = async (n: NotificationItem) => {
+    setNotifications((prev) => prev.map((item) => (item.id === n.id ? { ...item, read: true } : item)));
+    if (!n.read) {
+      await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
+    }
+    if (n.href) navigate(n.href);
   };
 
   return (
@@ -607,15 +690,80 @@ useEffect(() => {
                 {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
               </Button>
 
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground"
-                aria-label="Сповіщення"
-                title="Сповіщення"
-              >
-                <Bell className="h-4.5 w-4.5" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={cn(
+                      "relative h-9 w-9 rounded-xl text-muted-foreground hover:text-foreground",
+                      "inline-flex items-center justify-center transition-colors",
+                      "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                    )}
+                    aria-label="Сповіщення"
+                    title="Сповіщення"
+                  >
+                    <Bell className="h-4.5 w-4.5" />
+                    {unreadCount > 0 ? (
+                      <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                        {unreadCount}
+                      </span>
+                    ) : null}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-[340px]" align="end" sideOffset={10}>
+                  <div className="px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm font-semibold text-foreground">Сповіщення</div>
+                      {unreadCount > 0 ? (
+                        <button
+                          type="button"
+                          onClick={markAllRead}
+                          className="text-xs font-medium text-muted-foreground hover:text-foreground"
+                        >
+                          Позначити всі
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {unreadCount > 0 ? `Непрочитані: ${unreadCount}` : "Все прочитано"}
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <div className="max-h-[320px] overflow-auto">
+                    {notificationsLoading ? (
+                      <div className="px-3 py-6 text-center text-xs text-muted-foreground">Завантаження...</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="px-3 py-6 text-center text-xs text-muted-foreground">Поки немає сповіщень.</div>
+                    ) : (
+                      notifications.map((n) => (
+                        <DropdownMenuItem
+                          key={n.id}
+                          className={cn("flex items-start gap-3 px-3 py-2.5", !n.read && "bg-muted/40")}
+                          onClick={() => openNotification(n)}
+                        >
+                          <span
+                            className={cn(
+                              "mt-1 h-2 w-2 rounded-full",
+                              n.tone === "success" && "bg-emerald-500",
+                              n.tone === "warning" && "bg-amber-500",
+                              n.tone === "info" && "bg-sky-500",
+                              !n.tone && "bg-muted-foreground"
+                            )}
+                          />
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-foreground truncate">{n.title}</div>
+                            <div className="text-xs text-muted-foreground line-clamp-2">{n.description}</div>
+                            <div className="mt-1 text-[10px] text-muted-foreground/70">{n.time}</div>
+                          </div>
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => navigate("/notifications")}>
+                    Всі сповіщення
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
             </div>
           </div>
