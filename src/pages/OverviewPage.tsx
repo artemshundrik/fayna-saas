@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { cn } from "@/lib/utils";
+import { mapActivityRow, type ActivityItem, type ActivityRow } from "@/lib/activity";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,12 +45,6 @@ type TrainingRow = {
   location: string | null;
 };
 
-type ActivityItem = {
-  id: string;
-  event_type: string | null;
-  player: { first_name: string | null; last_name: string | null } | null;
-  created_at: string;
-};
 
 type KPI = {
   matches: number;
@@ -103,17 +98,6 @@ function LogoCircle({ src, alt, size = 32, className }: { src?: string | null; a
   );
 }
 
-function renderActivity(a: ActivityItem) {
-  const playerLabel = a.player ? `${a.player.first_name ?? ""} ${a.player.last_name ?? ""}`.trim() : "Гравець";
-  const type = (a.event_type ?? "").toLowerCase().trim();
-  if (type === "goal") return `⚽ Гол — ${playerLabel}`;
-  if (type === "penalty_scored") return `⚽ Пенальті — ${playerLabel}`;
-  if (type === "own_goal") return `🥅 Автогол — ${playerLabel}`;
-  if (type === "yellow_card") return `🟨 Картка — ${playerLabel}`;
-  if (type === "red_card") return `🟥 Картка — ${playerLabel}`;
-  if (type === "goalkeeper_save") return `🧤 Сейв — ${playerLabel}`;
-  return "Подія";
-}
 
 /* ================== PAGE ================== */
 
@@ -148,13 +132,23 @@ export function OverviewPage() {
       const since14d = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
       const sinceDate = since14d.slice(0, 10);
 
-      const [matchesRes, trainingsRes] = await Promise.all([
+      const [playedRes, upcomingRes, trainingsRes] = await Promise.all([
         supabase
           .from("matches")
           .select("id, opponent_name, opponent_logo_url, match_date, status, home_away, score_team, score_opponent")
           .eq("team_id", TEAM_ID)
+          .eq("status", "played")
           .order("match_date", { ascending: false })
-          .limit(60),
+          .limit(500),
+
+        supabase
+          .from("matches")
+          .select("id, opponent_name, opponent_logo_url, match_date, status, home_away, score_team, score_opponent")
+          .eq("team_id", TEAM_ID)
+          .neq("status", "canceled")
+          .gte("match_date", now)
+          .order("match_date", { ascending: true })
+          .limit(1),
 
         supabase
           .from("trainings")
@@ -166,17 +160,24 @@ export function OverviewPage() {
       ]);
 
       if (cancelled) return;
-      if (matchesRes.error) {
-        console.error("Overview matches load error", matchesRes.error);
+      if (playedRes.error) {
+        console.error("Overview played matches load error", playedRes.error);
+      }
+      if (upcomingRes.error) {
+        console.error("Overview upcoming matches load error", upcomingRes.error);
       }
       if (trainingsRes.error) {
         console.error("Overview trainings load error", trainingsRes.error);
       }
 
-      const matchesList = ((matchesRes.data as MatchRow[]) ?? []).map((m) => ({
+      const playedMatches = ((playedRes.data as MatchRow[]) ?? []).map((m) => ({
         ...m,
         opponent_logo_url: normalizeLogoUrl(m.opponent_logo_url ?? null),
       }));
+      const upcomingMatch = ((upcomingRes.data as MatchRow[]) ?? []).map((m) => ({
+        ...m,
+        opponent_logo_url: normalizeLogoUrl(m.opponent_logo_url ?? null),
+      }))[0] ?? null;
       let logo: string | null = null;
       const { data: teamData, error: teamError } = await supabase
         .from("teams")
@@ -198,36 +199,24 @@ export function OverviewPage() {
       }
 
       setTeamLogo(logo);
-      const nowTs = Date.now();
-      const isCanceled = (m: MatchRow) => (m.status ?? "scheduled") === "canceled";
-      const pastMatches = matchesList.filter(
-        (m) => !isCanceled(m) && new Date(m.match_date).getTime() < nowTs
-      );
-      const futureMatches = matchesList
-        .filter((m) => !isCanceled(m) && new Date(m.match_date).getTime() >= nowTs)
-        .sort((a, b) => new Date(a.match_date).getTime() - new Date(b.match_date).getTime());
-
-      const scoredMatches = pastMatches.filter(
+      const scoredMatches = playedMatches.filter(
         (m) => m.score_team !== null && m.score_opponent !== null
       );
 
-      const nextMatchItem = futureMatches[0] ?? null;
-      const lastMatchItem = pastMatches[0] ?? null;
-      const lastFiveList = pastMatches.slice(0, 5);
+      const nextMatchItem = upcomingMatch;
+      const lastMatchItem = playedMatches[0] ?? null;
+      const lastFiveList = playedMatches.slice(0, 5);
 
       const trainingsList = (trainingsRes.data as TrainingRow[]) ?? [];
       const nextTrainingItem =
         trainingsList.find((t) => new Date(`${t.date}T${t.time || "00:00"}`).getTime() >= Date.now()) || null;
 
-      const lastFiveIds = lastFiveList.map((m) => m.id).filter(Boolean);
-      const activityRes = lastFiveIds.length
-        ? await supabase
-            .from("match_events")
-            .select("id, event_type, created_at, player:player_id (first_name, last_name)")
-            .in("match_id", lastFiveIds)
-            .order("created_at", { ascending: false })
-            .limit(6)
-        : { data: [] };
+      const activityRes = await supabase
+        .from("activity_log")
+        .select("id, team_id, user_id, actor_name, action, entity_type, entity_id, title, href, created_at")
+        .eq("team_id", TEAM_ID)
+        .order("created_at", { ascending: false })
+        .limit(6);
 
       const recentTrainingsRes = await supabase
         .from("trainings")
@@ -246,12 +235,14 @@ export function OverviewPage() {
       setLastMatch(lastMatchItem);
       setLastFive(lastFiveList);
       setNextTraining(nextTrainingItem);
-      setActivity((activityRes.data as any) ?? []);
+      if (!activityRes.error) {
+        setActivity(((activityRes.data || []) as ActivityRow[]).map(mapActivityRow));
+      }
 
       const wins = scoredMatches.filter((m) => (m.score_team ?? 0) > (m.score_opponent ?? 0)).length;
       setKpi((prev) => ({
         ...prev,
-        matches: pastMatches.length,
+        matches: playedMatches.length,
         wins,
         goalsFor: scoredMatches.reduce((s, m) => s + (m.score_team ?? 0), 0),
         goalsAgainst: scoredMatches.reduce((s, m) => s + (m.score_opponent ?? 0), 0),
@@ -517,9 +508,14 @@ export function OverviewPage() {
 
           <Card className="rounded-[var(--radius-section)] border border-border bg-gradient-to-b from-card to-card/70 shadow-none">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Activity className="h-4 w-4" /> Активність
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Activity className="h-4 w-4" /> Останні дії
+                </CardTitle>
+                <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                  <Link to="/activity">Всі</Link>
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {activity.length === 0 ? (
@@ -531,7 +527,10 @@ export function OverviewPage() {
                   {activity.map((a) => (
                     <div key={a.id} className="flex items-start gap-3 text-sm text-muted-foreground">
                       <span className="mt-1.5 h-2 w-2 rounded-full bg-primary/50 shadow-[0_0_0_3px_rgba(59,130,246,0.08)]" />
-                      <span>{renderActivity(a)}</span>
+                      <div className="min-w-0">
+                        <div className="text-sm text-foreground truncate">{a.title}</div>
+                        {a.subtitle ? <div className="text-xs text-muted-foreground">{a.subtitle}</div> : null}
+                      </div>
                     </div>
                   ))}
                 </div>

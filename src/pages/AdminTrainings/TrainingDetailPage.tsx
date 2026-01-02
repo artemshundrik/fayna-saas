@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { logActivity } from "@/lib/activityLogger";
 
 import {
   ArrowLeft,
@@ -299,6 +300,14 @@ playerList.forEach(p => {
     try {
       setSaving(true);
       await deleteTraining(id);
+      logActivity({
+        teamId: TEAM_ID,
+        action: "delete_training",
+        entityType: "trainings",
+        entityId: id,
+        title: `Видалено тренування ${training?.date || ""}`.trim(),
+        href: "/admin/trainings",
+      });
       navigate("/admin/trainings");
     } catch (e: any) {
       console.error(e);
@@ -346,7 +355,7 @@ playerList.forEach(p => {
     setSaving(true);
     setError(null);
     try {
-      await updateTraining(id, {
+      const updated = await updateTraining(id, {
         date: form.date,
         time: form.time,
         type: form.type,
@@ -356,8 +365,16 @@ playerList.forEach(p => {
         comment: form.comment.trim() || undefined,
       });
 
-      const updated = await getTrainingById(id);
-      setTraining(updated);
+      const refreshed = await getTrainingById(id);
+      setTraining(refreshed);
+      logActivity({
+        teamId: TEAM_ID,
+        action: "update_training",
+        entityType: "trainings",
+        entityId: id,
+        title: `Оновлено тренування ${updated.date} ${updated.time || ""}`.trim(),
+        href: `/admin/trainings/${id}`,
+      });
       setEditing(false);
     } catch (e: any) {
       console.error(e);

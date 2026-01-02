@@ -23,6 +23,7 @@ import {
   Sun,
   Moon,
   ClipboardCheck,
+  Activity,
   WalletCards,
   LineChart,
   Swords,
@@ -93,6 +94,7 @@ const ROUTES = {
   players: "/admin/players",
   tournaments: "/admin/tournaments",
   finance: "/finance",
+  activity: "/activity",
 
   analyticsPlayers: "/analytics/players",
   analyticsTeam: "/analytics/team",
@@ -121,6 +123,7 @@ const baseSidebarLinks: SidebarLink[] = [
 
   // MANAGEMENT
   { label: "Фінанси", to: ROUTES.finance, group: "management", icon: WalletCards },
+  { label: "Активність", to: ROUTES.activity, group: "management", icon: Activity },
   { label: "Доступ / Ролі", to: ROUTES.membersAccess, group: "management", icon: ShieldAlert },
   
 ];
@@ -215,6 +218,13 @@ const getHeaderConfig = (pathname: string): HeaderConfig => {
       breadcrumbLabel: "Сповіщення",
       breadcrumbTo: ROUTES.notifications,
     };
+  if (pathname.startsWith(ROUTES.activity))
+    return {
+      title: "Активність",
+      subtitle: "Останні дії команди та зміни в системі.",
+      breadcrumbLabel: "Активність",
+      breadcrumbTo: ROUTES.activity,
+    };
   if (pathname.startsWith(ROUTES.membersAccess))
     return {
       title: "Доступ / Ролі",
@@ -289,7 +299,7 @@ function formatDateTimeUA(iso: string) {
 export function AppLayout({ children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { userId } = useAuth();
+  const { userId, teamId } = useAuth();
   const baseHeader = useMemo(() => getHeaderConfig(location.pathname), [location.pathname]);
 
   // /matches/:matchId/events
@@ -409,6 +419,7 @@ useEffect(() => {
   const [theme, setTheme] = useState<ThemeMode>(() => getInitialTheme());
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [activityUnreadCount, setActivityUnreadCount] = useState(0);
 
   useEffect(() => {
     applyTheme(theme);
@@ -417,6 +428,24 @@ useEffect(() => {
   const toggleTheme = () => {
     setTheme((t) => (t === "dark" ? "light" : "dark"));
   };
+
+  const loadActivityUnread = React.useCallback(async () => {
+    if (!teamId || !userId) return;
+    const { data: state } = await supabase
+      .from("activity_read_state")
+      .select("last_seen_at")
+      .eq("team_id", teamId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const lastSeen = state?.last_seen_at ?? null;
+    const baseQuery = supabase
+      .from("activity_log")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", teamId);
+    const { count } = lastSeen ? await baseQuery.gt("created_at", lastSeen) : await baseQuery;
+    setActivityUnreadCount(count || 0);
+  }, [teamId, userId]);
 
   const loadNotifications = React.useCallback(async () => {
     if (!userId) return;
@@ -436,6 +465,20 @@ useEffect(() => {
   useEffect(() => {
     loadNotifications();
   }, [loadNotifications]);
+
+  useEffect(() => {
+    loadActivityUnread();
+  }, [loadActivityUnread]);
+
+  useEffect(() => {
+    const handler = () => {
+      loadActivityUnread();
+    };
+    window.addEventListener("activity_read", handler);
+    return () => {
+      window.removeEventListener("activity_read", handler);
+    };
+  }, [loadActivityUnread]);
 
   useEffect(() => {
     if (!userId) return;
@@ -462,7 +505,34 @@ useEffect(() => {
     };
   }, [userId]);
 
+  useEffect(() => {
+    if (!teamId) return;
+    const channel = supabase
+      .channel(`activity:${teamId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "activity_log",
+          filter: `team_id=eq.${teamId}`,
+        },
+        () => {
+          if (location.pathname.startsWith(ROUTES.activity)) {
+            setActivityUnreadCount(0);
+            return;
+          }
+          setActivityUnreadCount((prev) => prev + 1);
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [teamId, location.pathname]);
+
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadNotifications = notifications.filter((n) => !n.read);
 
   const markAllRead = async () => {
     if (!userId || unreadCount === 0) return;
@@ -583,16 +653,19 @@ useEffect(() => {
             label="Команда"
             links={sidebarLinks.filter((l) => l.group === "team")}
             currentPath={location.pathname}
+            activityUnreadCount={activityUnreadCount}
           />
           <SidebarGroup
             label="Аналітика"
             links={sidebarLinks.filter((l) => l.group === "analytics")}
             currentPath={location.pathname}
+            activityUnreadCount={activityUnreadCount}
           />
           <SidebarGroup
             label="Управління"
             links={sidebarLinks.filter((l) => l.group === "management")}
             currentPath={location.pathname}
+            activityUnreadCount={activityUnreadCount}
           />
         </nav>
 
@@ -731,22 +804,23 @@ useEffect(() => {
                   <div className="max-h-[320px] overflow-auto">
                     {notificationsLoading ? (
                       <div className="px-3 py-6 text-center text-xs text-muted-foreground">Завантаження...</div>
-                    ) : notifications.length === 0 ? (
-                      <div className="px-3 py-6 text-center text-xs text-muted-foreground">Поки немає сповіщень.</div>
+                    ) : unreadNotifications.length === 0 ? (
+                      <div className="px-3 py-6 text-center text-xs text-muted-foreground">Немає непрочитаних.</div>
                     ) : (
-                      notifications.map((n) => (
+                      unreadNotifications.map((n) => (
                         <DropdownMenuItem
                           key={n.id}
-                          className={cn("flex items-start gap-3 px-3 py-2.5", !n.read && "bg-muted/40")}
+                          className="flex items-start gap-3 px-3 py-2.5"
                           onClick={() => openNotification(n)}
                         >
                           <span
                             className={cn(
                               "mt-1 h-2 w-2 rounded-full",
-                              n.tone === "success" && "bg-emerald-500",
-                              n.tone === "warning" && "bg-amber-500",
-                              n.tone === "info" && "bg-sky-500",
-                              !n.tone && "bg-muted-foreground"
+                              !n.read && n.tone === "success" && "bg-emerald-500",
+                              !n.read && n.tone === "warning" && "bg-amber-500",
+                              !n.read && n.tone === "info" && "bg-sky-500",
+                              !n.read && !n.tone && "bg-muted-foreground",
+                              n.read && "bg-muted-foreground/40"
                             )}
                           />
                           <div className="min-w-0">
@@ -792,10 +866,12 @@ function SidebarGroup({
   label,
   links,
   currentPath,
+  activityUnreadCount = 0,
 }: {
   label: string;
   links: SidebarLink[];
   currentPath: string;
+  activityUnreadCount?: number;
 }) {
   if (links.length === 0) return null;
 
@@ -838,12 +914,18 @@ function SidebarGroup({
 
               <span className="truncate">{link.label}</span>
 
-              <span
-                className={cn(
-                  "ml-auto h-1.5 w-1.5 rounded-full transition-opacity",
-                  active ? "bg-primary opacity-100" : "bg-primary opacity-0 group-hover:opacity-40"
-                )}
-              />
+              {link.to === ROUTES.activity && activityUnreadCount > 0 ? (
+                <span className="ml-auto rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                  {activityUnreadCount}
+                </span>
+              ) : (
+                <span
+                  className={cn(
+                    "ml-auto h-1.5 w-1.5 rounded-full transition-opacity",
+                    active ? "bg-primary opacity-100" : "bg-primary opacity-0 group-hover:opacity-40"
+                  )}
+                />
+              )}
             </Link>
           );
         })}
@@ -852,19 +934,26 @@ function SidebarGroup({
   );
 }
 
-function MobileNav({ currentPath }: { currentPath: string }) {
+function MobileNav({ currentPath, activityUnreadCount = 0 }: { currentPath: string; activityUnreadCount?: number }) {
   return (
     <div className="space-y-5">
-      <SidebarGroup label="Команда" links={sidebarLinks.filter((l) => l.group === "team")} currentPath={currentPath} />
+      <SidebarGroup
+        label="Команда"
+        links={sidebarLinks.filter((l) => l.group === "team")}
+        currentPath={currentPath}
+        activityUnreadCount={activityUnreadCount}
+      />
       <SidebarGroup
         label="Аналітика"
         links={sidebarLinks.filter((l) => l.group === "analytics")}
         currentPath={currentPath}
+        activityUnreadCount={activityUnreadCount}
       />
       <SidebarGroup
         label="Управління"
         links={sidebarLinks.filter((l) => l.group === "management")}
         currentPath={currentPath}
+        activityUnreadCount={activityUnreadCount}
       />
       <div className="pt-2 border-t border-border">
         <div className="flex items-center gap-3 rounded-xl p-3 bg-muted/40">

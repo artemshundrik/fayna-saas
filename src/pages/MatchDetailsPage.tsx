@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { logActivity } from "@/lib/activityLogger";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1315,6 +1316,14 @@ if (ttErr) {
     // ✅ важливо: підтягнути match разом із tournaments join, щоб metaLine/шапка оновились
     await refreshMatch();
 
+    logActivity({
+      teamId: match.team_id,
+      action: "update_match",
+      entityType: "matches",
+      entityId: match.id,
+      title: `Оновлено матч проти ${payload.opponent_name}`,
+      href: `/matches/${match.id}`,
+    });
     setMetaSuccess("Деталі матчу збережено");
     setEditOpen(false);
 
@@ -1383,6 +1392,14 @@ if (ttErr) {
       return;
     }
 
+    logActivity({
+      teamId: match.team_id,
+      action: "delete_match",
+      entityType: "matches",
+      entityId: match.id,
+      title: `Видалено матч проти ${match.opponent_name}`,
+      href: "/matches-shadcn",
+    });
     window.location.href = "/matches-shadcn";
   }
 

@@ -11,6 +11,7 @@ import {
   ShieldAlert
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { logActivity } from "@/lib/activityLogger";
 
 export default function InvitePage() {
   const { session, signOut, refreshTeamContext } = useAuth();
@@ -62,6 +63,14 @@ export default function InvitePage() {
       if (error) throw error;
 
       await refreshTeamContext();
+      const { data: teamIdData } = await supabase.rpc("current_team_id");
+      logActivity({
+        teamId: (teamIdData as string | null) ?? null,
+        action: "accept_invite",
+        entityType: "team",
+        title: "Прийнято запрошення до команди",
+        href: "/settings/members",
+      });
       setSuccess(true);
       
       setTimeout(() => {

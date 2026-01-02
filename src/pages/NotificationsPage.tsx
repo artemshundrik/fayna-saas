@@ -139,10 +139,11 @@ export default function NotificationsPage() {
                     <div
                       className={cn(
                         "h-2 w-2 rounded-full",
-                        n.tone === "success" && "bg-emerald-500",
-                        n.tone === "warning" && "bg-amber-500",
-                        n.tone === "info" && "bg-sky-500",
-                        !n.tone && "bg-muted-foreground"
+                        !n.read && n.tone === "success" && "bg-emerald-500",
+                        !n.read && n.tone === "warning" && "bg-amber-500",
+                        !n.read && n.tone === "info" && "bg-sky-500",
+                        !n.read && !n.tone && "bg-muted-foreground",
+                        n.read && "bg-muted-foreground/40"
                       )}
                     />
                     <div className="text-sm font-semibold text-foreground truncate">{n.title}</div>

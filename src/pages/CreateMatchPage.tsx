@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 
 import { cn } from "@/lib/utils";
+import { logActivity } from "@/lib/activityLogger";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -2013,6 +2014,14 @@ export function CreateMatchPage() {
       return;
     }
 
+    logActivity({
+      teamId: TEAM_ID,
+      action: "create_match",
+      entityType: "matches",
+      entityId: data.id,
+      title: `Створено матч проти ${form.opponent_name.trim()}`,
+      href: `/matches/${data.id}`,
+    });
     navigate(`/matches/${data.id}`);
   }
 
@@ -2066,6 +2075,14 @@ export function CreateMatchPage() {
       return;
     }
 
+    logActivity({
+      teamId: TEAM_ID,
+      action: "create_match",
+      entityType: "matches",
+      entityId: data.id,
+      title: `Створено матч проти ${form.opponent_name.trim()}`,
+      href: `/matches/${data.id}`,
+    });
     setCreatedMatchId(data.id);
 
     await loadPlayersForStep2();

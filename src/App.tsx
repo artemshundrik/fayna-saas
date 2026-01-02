@@ -40,6 +40,7 @@ import { FinancePage } from "./pages/FinancePage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import UpdatePasswordPage from "./pages/UpdatePasswordPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import ActivityPage from "./pages/ActivityPage";
 
 // =======================
 // Types
@@ -396,6 +397,16 @@ function AppRoutes() {
           <RequireAuth session={session} loading={loading}>
             <AppLayout>
               <NotificationsPage />
+            </AppLayout>
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/activity"
+        element={
+          <RequireAuth session={session} loading={loading}>
+            <AppLayout>
+              <ActivityPage />
             </AppLayout>
           </RequireAuth>
         }

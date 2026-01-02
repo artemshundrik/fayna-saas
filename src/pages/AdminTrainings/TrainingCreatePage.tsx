@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CONTROL_BASE } from "@/components/ui/controlStyles";
 import { cn } from "@/lib/utils";
+import { logActivity } from "@/lib/activityLogger";
 
 const TEAM_ID = "389719a7-5022-41da-bc49-11e7a3afbd98";
 
@@ -81,7 +82,7 @@ export function TrainingCreatePage() {
     }
     try {
       setSaving(true);
-      await createTraining({
+      const created = await createTraining({
         team_id: TEAM_ID,
         date,
         time,
@@ -90,6 +91,14 @@ export function TrainingCreatePage() {
         sparring_logo_url: isSparring ? sparringLogo.trim() || null : null,
         location: location.trim() || null,
         comment: comment.trim() || undefined,
+      });
+      logActivity({
+        teamId: TEAM_ID,
+        action: "create_training",
+        entityType: "trainings",
+        entityId: created.id,
+        title: `Створено тренування ${created.date} ${created.time || ""}`.trim(),
+        href: `/admin/trainings/${created.id}`,
       });
       navigate("/admin/trainings");
     } catch (err: any) {

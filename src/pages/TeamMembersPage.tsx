@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROLE_BADGE_STYLES } from "@/lib/roleBadges";
+import { logActivity } from "@/lib/activityLogger";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,7 +103,7 @@ const ROLE_SELECT_OPTIONS = {
 };
 
 export function TeamMembersPage() {
-  const { teamId, role: myRole, userId } = useAuth();
+  const { teamId, role: myRole, userId: currentUserId } = useAuth();
   
   // TABS STATE
   const [activeTab, setActiveTab] = useState<"members" | "invites">("members");
@@ -174,15 +175,27 @@ export function TeamMembersPage() {
   }
 
   // --- ACTIONS ---
-  async function updateRole(userId: string, newRole: string) {
+  async function updateRole(targetUserId: string, newRole: string) {
     const oldMembers = [...members];
-    setMembers(members.map(m => m.user_id === userId ? { ...m, role: newRole as any } : m));
-    const { error } = await supabase.from("team_members").update({ role: newRole }).eq("user_id", userId).eq("team_id", teamId);
+    setMembers(members.map(m => m.user_id === targetUserId ? { ...m, role: newRole as any } : m));
+    const { error } = await supabase.from("team_members").update({ role: newRole }).eq("user_id", targetUserId).eq("team_id", teamId);
     if (error) {
       setMembers(oldMembers);
       toast.error("Не вдалося змінити роль");
     } else {
       toast.success("Роль оновлено");
+      const target = members.find((m) => m.user_id === targetUserId);
+      const targetLabel = target?.full_name || target?.email || "учасника";
+      const roleLabel = ROLE_BADGE_STYLES[newRole]?.label || newRole;
+      logActivity({
+        teamId,
+        userId: currentUserId,
+        action: "update_role",
+        entityType: "team",
+        entityId: targetUserId,
+        title: `Змінено роль ${targetLabel} на ${roleLabel}`,
+        href: "/settings/members",
+      });
     }
   }
 
@@ -196,26 +209,42 @@ export function TeamMembersPage() {
       toast.error("Не визначено команду");
       return;
     }
-    if (removeId === userId) {
+    if (removeId === currentUserId) {
       toast.error("Не можна видалити себе з команди");
       return;
     }
 
     setRemoveBusy(true);
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("team_members")
       .delete()
       .eq("user_id", removeId)
-      .eq("team_id", teamId);
+      .eq("team_id", teamId)
+      .select("user_id");
     setRemoveBusy(false);
 
     if (error) {
       toast.error("Помилка видалення", { description: error.message });
       return;
     }
+    if (!data || data.length === 0) {
+      toast.error("Не вдалося видалити", { description: "Запис не знайдено або немає прав." });
+      return;
+    }
 
     toast.success("Користувача видалено");
     setMembers((prev) => prev.filter((m) => m.user_id !== removeId));
+    const removed = members.find((m) => m.user_id === removeId);
+    const removedLabel = removed?.full_name || removed?.email || "учасника";
+    logActivity({
+      teamId,
+      userId: currentUserId,
+      action: "remove_member",
+      entityType: "team",
+      entityId: removeId,
+      title: `Видалено учасника ${removedLabel}`,
+      href: "/settings/members",
+    });
     setRemoveId(null);
   }
 
@@ -234,6 +263,15 @@ export function TeamMembersPage() {
     } else {
       toast.success("Запрошення скасовано");
       setInvites((prev) => prev.filter((i) => i.id !== revokeId));
+      logActivity({
+        teamId,
+        userId: currentUserId,
+        action: "revoke_invite",
+        entityType: "team",
+        entityId: revokeId,
+        title: "Скасовано інвайт",
+        href: "/settings/members",
+      });
     }
     
     setRevokeBusy(false);
@@ -252,6 +290,15 @@ export function TeamMembersPage() {
       const link = `${window.location.origin}/invite?code=${data}`;
       setGeneratedLink(link);
       fetchInvites();
+      const roleLabel = ROLE_BADGE_STYLES[inviteRole]?.label || inviteRole;
+      logActivity({
+        teamId,
+        userId: currentUserId,
+        action: "create_invite",
+        entityType: "team",
+        title: `Створено інвайт (${roleLabel})`,
+        href: "/settings/members",
+      });
     } catch (e: any) {
       toast.error(e.message);
     } finally {
