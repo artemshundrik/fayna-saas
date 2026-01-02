@@ -37,6 +37,8 @@ import { CreateMatchPage } from "./pages/CreateMatchPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { TournamentDetailsPage } from "./pages/TournamentDetailsPage";
 import { FinancePage } from "./pages/FinancePage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import UpdatePasswordPage from "./pages/UpdatePasswordPage";
 
 // =======================
 // Types
@@ -232,7 +234,7 @@ function LoginPage() {
   const next = rawNext.startsWith("/") ? rawNext : "/overview";
   const isInviteFlow = next.startsWith("/invite");
 
-  const [mode, setMode] = useState<"password" | "magic">(isInviteFlow ? "magic" : "password");
+  const [mode] = useState<"password" | "magic">(isInviteFlow ? "magic" : "password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -319,34 +321,6 @@ function LoginPage() {
           </div>
         )}
 
-        {!isInviteFlow ? (
-          <div className="mb-4 inline-flex rounded-xl bg-muted p-1 border border-border/50">
-            <button
-              type="button"
-              className={cx(
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
-                mode === "magic" 
-                  ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10" 
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => setMode("magic")}
-            >
-              Magic link
-            </button>
-            <button
-              type="button"
-              className={cx(
-                "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200",
-                mode === "password" 
-                  ? "bg-background text-foreground shadow-sm ring-1 ring-black/5 dark:ring-white/10" 
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-              onClick={() => setMode("password")}
-            >
-              Пароль
-            </button>
-          </div>
-        ) : null}
 
         <form onSubmit={onLogin} className="space-y-4">
           <div>
@@ -383,9 +357,19 @@ function LoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center text-xs text-muted-foreground">
-          Для інвайтів: <Link className="underline hover:text-primary transition-colors" to="/invite">перейти до /invite</Link>
-        </div>
+        {!isInviteFlow ? (
+          <div className="mt-4 text-center text-xs text-muted-foreground">
+            <Link className="underline hover:text-primary transition-colors" to="/reset-password">
+              Забув пароль?
+            </Link>
+          </div>
+        ) : null}
+
+        {!isInviteFlow ? (
+          <div className="mt-6 text-center text-xs text-muted-foreground">
+            Для інвайтів: <Link className="underline hover:text-primary transition-colors" to="/invite">перейти до /invite</Link>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -403,6 +387,8 @@ function AppRoutes() {
     <Routes>
       {/* public */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/update-password" element={<UpdatePasswordPage />} />
 
       {/* --- ВИПРАВЛЕНО: Інвайт тепер "публічний" (має свій лейаут всередині) --- */}
       <Route path="/invite" element={<InvitePage />} />

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { User, Mail, Shield, Save, Loader2, Camera, Lock, Globe } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -407,8 +408,8 @@ export function ProfilePage() {
                         className="bg-muted/30 border-input h-10 rounded-xl"
                      />
                    </div>
-                   <Button variant="outline" className="h-10 rounded-xl border-input hover:bg-muted/50">
-                     Змінити
+                   <Button asChild variant="outline" className="h-10 rounded-xl border-input hover:bg-muted/50">
+                     <Link to="/reset-password">Змінити</Link>
                    </Button>
                 </div>
               </div>
